@@ -1,0 +1,61 @@
+name: offline_music_platform
+description: A personal offline music platform - organizes messy local music into a clean, Spotify-like library, fully offline-first.
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Local database (library index only - never stores the audio itself)
+  isar: ^3.1.0+1
+  isar_flutter_libs: ^3.1.0+1
+
+  # Playback
+  just_audio: ^0.9.40
+  audio_service: ^0.18.15
+  audio_session: ^0.1.21
+
+  # Device media access (scanning MediaStore)
+  on_audio_query: ^2.9.0
+
+  # Networking (metadata + artwork providers)
+  dio: ^5.5.0+1
+
+  # Storage / caching
+  path_provider: ^2.1.3
+  cached_network_image: ^3.3.1
+  palette_generator: ^0.3.3+3 # dominant color extraction for the cinematic player backdrop
+  image: ^4.2.0 # resize/compress downloaded artwork before caching
+
+  # Permissions (storage / audio read on Android 13+)
+  permission_handler: ^11.3.1
+
+  # Background work (folder monitor, matcher, artwork/lyrics downloader queues)
+  workmanager: ^0.5.2
+
+  # Utilities
+  equatable: ^2.0.5
+  collection: ^1.18.0
+  crypto: ^3.0.3 # audio file hashing for duplicate detection
+  just_waveform: ^0.0.9 # PCM/waveform decode - backs the perceptual audio fingerprint
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.9
+  isar_generator: ^3.1.0+1
+  riverpod_generator: ^2.4.0
+
+flutter:
+  uses-material-design: true
