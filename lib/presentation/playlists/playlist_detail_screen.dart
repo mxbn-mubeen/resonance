@@ -1,0 +1,304 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:audio_service/audio_service.dart';
+import '../../core/di/providers.dart';
+import '../../domain/entities/library_entities.dart';
+import '../../domain/entities/song.dart';
+import '../player/player_screen.dart';
+import '../widgets/playing_indicator.dart';
+import '../widgets/mini_player.dart';
+import 'components/playlist_header.dart';
+
+class PlaylistDetailScreen extends ConsumerStatefulWidget {
+  final PlaylistEntity playlist;
+
+  const PlaylistDetailScreen({super.key, required this.playlist});
+
+  @override
+  ConsumerState<PlaylistDetailScreen> createState() => _PlaylistDetailScreenState();
+}
+
+class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
+  String _filter = '';
+  final TextEditingController _filterController = TextEditingController();
+  bool _showSearch = false;
+
+  @override
+  void dispose() {
+    _filterController.dispose();
+    super.dispose();
+  }
+
+  Future<List<Song>> _loadSongs(PlaylistEntity playlist) async {
+    final libraryRepo = await ref.read(libraryRepositoryProvider.future);
+    final all = await libraryRepo.getAllSongs();
+    return playlist.songIds
+        .map((id) {
+          try {
+            return all.firstWhere((s) => s.id == id);
+          } catch (_) {
+            return null;
+          }
+        })
+        .whereType<Song>()
+        .toList();
+  }
+
+  Future<void> _showRenameDialog(PlaylistEntity playlist) async {
+    final controller = TextEditingController(text: playlist.name);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename Playlist'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Playlist name'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) Navigator.pop(ctx, text);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (newName != null && newName != playlist.name) {
+      final repo = await ref.read(playlistRepositoryProvider.future);
+      await repo.rename(playlist.id, newName);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('✅ Renamed to "$newName"')),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDelete(PlaylistEntity playlist) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Playlist'),
+        content: Text('Delete "${playlist.name}"? Songs will not be removed from your library.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      final repo = await ref.read(playlistRepositoryProvider.future);
+      await repo.delete(playlist.id);
+      if (mounted) Navigator.of(context).pop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Watch the stream so the screen rebuilds when songs are added/removed
+    final playlistsAsync = ref.watch(playlistsStreamProvider);
+    final currentPlaylist = playlistsAsync.when(
+      data: (playlists) {
+        try {
+          return playlists.firstWhere((p) => p.id == widget.playlist.id);
+        } catch (_) {
+          return widget.playlist;
+        }
+      },
+      loading: () => widget.playlist,
+      error: (_, __) => widget.playlist,
+    );
+
+    return Scaffold(
+      appBar: AppBar(
+        title: _showSearch
+            ? TextField(
+                controller: _filterController,
+                autofocus: true,
+                style: const TextStyle(fontSize: 16),
+                decoration: const InputDecoration(
+                  hintText: 'Filter songs…',
+                  border: InputBorder.none,
+                ),
+                onChanged: (v) => setState(() => _filter = v),
+              )
+            : Text(currentPlaylist.name),
+        actions: [
+          IconButton(
+            icon: Icon(_showSearch ? Icons.close : Icons.search),
+            tooltip: _showSearch ? 'Close search' : 'Filter songs',
+            onPressed: () {
+              setState(() {
+                _showSearch = !_showSearch;
+                if (!_showSearch) {
+                  _filter = '';
+                  _filterController.clear();
+                }
+              });
+            },
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'rename') _showRenameDialog(currentPlaylist);
+              if (value == 'delete') _confirmDelete(currentPlaylist);
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'rename', child: Row(
+                children: [Icon(Icons.edit, size: 18), SizedBox(width: 8), Text('Rename')],
+              )),
+              const PopupMenuItem(value: 'delete', child: Row(
+                children: [Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), SizedBox(width: 8), Text('Delete', style: TextStyle(color: Colors.redAccent))],
+              )),
+            ],
+          ),
+        ],
+      ),
+      bottomNavigationBar: const MiniPlayer(),
+      body: FutureBuilder<List<Song>>(
+        future: _loadSongs(currentPlaylist),
+        key: ValueKey(currentPlaylist.songIds.length),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final songs = snapshot.data ?? [];
+          final filtered = _filter.isEmpty
+              ? songs
+              : songs.where((s) {
+                  final q = _filter.toLowerCase();
+                  return (s.title ?? '').toLowerCase().contains(q) ||
+                      (s.artist ?? '').toLowerCase().contains(q) ||
+                      (s.album ?? '').toLowerCase().contains(q);
+                }).toList();
+
+          if (songs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.queue_music, size: 72,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.4)),
+                  const SizedBox(height: 16),
+                  Text('No songs in this playlist yet',
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  const SizedBox(height: 8),
+                  Text('Tap ⋮ on any song and choose "Add to playlist"',
+                      style: TextStyle(
+                          fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                ],
+              ),
+            );
+          }
+
+          if (filtered.isEmpty) {
+            return Center(
+              child: Text('No results for "$_filter"',
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            );
+          }
+
+          return Column(
+            children: [
+              // ── Playlist Header ────────────────────────────────────────
+              PlaylistHeader(playlist: currentPlaylist, songs: songs),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: filtered.length,
+                  itemBuilder: (context, index) {
+                    final song = filtered[index];
+                    return ListTile(
+                      leading: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: song.artworkPath != null
+                            ? Image.file(File(song.artworkPath!), width: 44, height: 44, fit: BoxFit.cover)
+                            : Container(
+                                width: 44,
+                                height: 44,
+                                color: Theme.of(context).colorScheme.primaryContainer,
+                                child: Icon(Icons.music_note,
+                                    color: Theme.of(context).colorScheme.onPrimaryContainer, size: 20),
+                              ),
+                      ),
+                      title: Text(song.title ?? song.filename, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text('${song.artist ?? 'Unknown'} • ${song.album ?? ''}',
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          StreamBuilder<MediaItem?>(
+                            stream: ref.watch(playbackControllerProvider).mediaItem,
+                            builder: (context, mediaSnapshot) {
+                              final item = mediaSnapshot.data;
+                              final isCurrent = item?.id == song.id;
+
+                              if (!isCurrent) return const SizedBox.shrink();
+
+                              return StreamBuilder<PlaybackState>(
+                                stream: ref.watch(playbackControllerProvider).playbackState,
+                                builder: (context, stateSnapshot) {
+                                  final playing = stateSnapshot.data?.playing ?? false;
+                                  if (!playing) return const SizedBox.shrink();
+
+                                  return const Padding(
+                                    padding: EdgeInsets.only(right: 8.0),
+                                    child: PlayingIndicator(size: 20),
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert),
+                            onSelected: (value) async {
+                              if (value == 'remove') {
+                                final repo = await ref.read(playlistRepositoryProvider.future);
+                                await repo.removeSong(currentPlaylist.id, song.id);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Removed "${song.title ?? song.filename}" from playlist')),
+                                  );
+                                }
+                              } else if (value == 'play_next') {
+                                await ref.read(playbackControllerProvider).playSongs(songs, startIndex: songs.indexOf(song));
+                                if (context.mounted) {
+                                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
+                                }
+                              }
+                            },
+                            itemBuilder: (_) => [
+                              const PopupMenuItem(value: 'play_next', child: Text('Play from here')),
+                              const PopupMenuItem(
+                                value: 'remove',
+                                child: Text('Remove from playlist', style: TextStyle(color: Colors.redAccent)),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      onTap: () async {
+                        await ref.read(playbackControllerProvider).playSongs(songs, startIndex: songs.indexOf(song));
+                        if (context.mounted) {
+                          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
+                        }
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}

@@ -19,9 +19,12 @@ class DatabaseService {
         AlbumRecordSchema,
         HistoryRecordSchema,
         PlaylistRecordSchema,
+        MetadataFetchHistoryRecordSchema,
+        LibraryHealthHistoryRecordSchema,
+        SearchHistoryRecordSchema,
       ],
       directory: dir.path,
-      name: 'offline_music_platform',
+      name: 'resonance',
     );
     return _isar!;
   }

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
@@ -48,7 +49,7 @@ class ArtworkManager {
       final rawBytes = response.data;
       if (rawBytes == null || rawBytes.isEmpty) return null;
 
-      final decoded = img.decodeImage(rawBytes);
+      final decoded = img.decodeImage(Uint8List.fromList(rawBytes));
       if (decoded == null) return null; // unrecognized/corrupt image data
 
       final resized = (decoded.width > maxDimension || decoded.height > maxDimension)
@@ -75,4 +76,32 @@ class ArtworkManager {
       await artworkDir.delete(recursive: true);
     }
   }
+
+  /// Resize + JPEG-compress raw image bytes (e.g. extracted from ID3 tags).
+  /// Returns compressed bytes, or the original bytes if decoding fails.
+  Future<Uint8List> compressBytes(
+    List<int> rawBytes, {
+    int maxDimension = 600,
+    int jpegQuality = 85,
+  }) async {
+    try {
+      final decoded = img.decodeImage(Uint8List.fromList(rawBytes));
+      if (decoded == null) return Uint8List.fromList(rawBytes);
+
+      final resized =
+          (decoded.width > maxDimension || decoded.height > maxDimension)
+              ? img.copyResize(
+                  decoded,
+                  width: decoded.width >= decoded.height ? maxDimension : null,
+                  height: decoded.height > decoded.width ? maxDimension : null,
+                  interpolation: img.Interpolation.average,
+                )
+              : decoded;
+
+      return Uint8List.fromList(img.encodeJpg(resized, quality: jpegQuality));
+    } catch (_) {
+      return Uint8List.fromList(rawBytes);
+    }
+  }
 }
+

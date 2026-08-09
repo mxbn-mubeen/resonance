@@ -14,8 +14,8 @@ Future<void> main() async {
   final playbackController = await AudioService.init(
     builder: () => PlaybackController(),
     config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.yourname.offline_music_platform.channel',
-      androidNotificationChannelName: 'Playback',
+      androidNotificationChannelId: 'com.yourname.resonance.channel',
+      androidNotificationChannelName: 'Resonance Music Playback',
       androidNotificationOngoing: true,
     ),
   );

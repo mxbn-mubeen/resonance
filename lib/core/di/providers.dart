@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:isar/isar.dart';
 
 import '../../application/artwork/artwork_manager.dart';
@@ -13,12 +14,17 @@ import '../../application/playlist/playlist_engine.dart';
 import '../../application/recommendation/recommendation_engine.dart';
 import '../../application/scanner/scanner_service.dart';
 import '../../data/local/database_service.dart';
+import '../../data/local/isar_schemas.dart';
 import '../../data/remote/itunes_api.dart';
 import '../../data/remote/musicbrainz_api.dart';
 import '../../data/repositories/history_repository.dart';
+import '../../data/repositories/library_health_history_repository.dart';
 import '../../data/repositories/library_repository.dart';
+import '../../data/repositories/metadata_fetch_history_repository.dart';
 import '../../data/repositories/metadata_repository.dart';
 import '../../data/repositories/playlist_repository.dart';
+import '../../data/repositories/search_history_repository.dart';
+import '../../domain/entities/library_entities.dart';
 import '../../domain/entities/song.dart';
 import '../theme/app_theme.dart';
 
@@ -31,24 +37,54 @@ final isarProvider = FutureProvider<Isar>((ref) async {
   return db.open();
 });
 
-final libraryRepositoryProvider = Provider<LibraryRepository>((ref) {
-  final isar = ref.watch(isarProvider).requireValue;
+final libraryRepositoryProvider = FutureProvider<LibraryRepository>((ref) async {
+  final isar = await ref.watch(isarProvider.future);
   return LibraryRepository(isar);
 });
 
-final metadataRepositoryProvider = Provider<MetadataRepository>((ref) {
-  final isar = ref.watch(isarProvider).requireValue;
+final metadataRepositoryProvider = FutureProvider<MetadataRepository>((ref) async {
+  final isar = await ref.watch(isarProvider.future);
   return MetadataRepository(isar);
 });
 
-final playlistRepositoryProvider = Provider<PlaylistRepository>((ref) {
-  final isar = ref.watch(isarProvider).requireValue;
+final playlistRepositoryProvider = FutureProvider<PlaylistRepository>((ref) async {
+  final isar = await ref.watch(isarProvider.future);
   return PlaylistRepository(isar);
 });
 
-final historyRepositoryProvider = Provider<HistoryRepository>((ref) {
-  final isar = ref.watch(isarProvider).requireValue;
+final historyRepositoryProvider = FutureProvider<HistoryRepository>((ref) async {
+  final isar = await ref.watch(isarProvider.future);
   return HistoryRepository(isar);
+});
+
+final metadataFetchHistoryRepositoryProvider =
+    FutureProvider<MetadataFetchHistoryRepository>((ref) async {
+  final isar = await ref.watch(isarProvider.future);
+  return MetadataFetchHistoryRepository(isar);
+});
+
+final libraryHealthHistoryRepositoryProvider =
+    FutureProvider<LibraryHealthHistoryRepository>((ref) async {
+  final isar = await ref.watch(isarProvider.future);
+  return LibraryHealthHistoryRepository(isar);
+});
+
+final searchHistoryRepositoryProvider =
+    FutureProvider<SearchHistoryRepository>((ref) async {
+  final isar = await ref.watch(isarProvider.future);
+  return SearchHistoryRepository(isar);
+});
+
+// ---------- Reactive Streams ----------
+
+final playlistsStreamProvider = StreamProvider<List<PlaylistEntity>>((ref) async* {
+  final isar = await ref.watch(isarProvider.future);
+  final repo = await ref.watch(playlistRepositoryProvider.future);
+
+  // Use Isar's collection watch via the generated collection accessor.
+  await for (final _ in isar.collection<PlaylistRecord>().watchLazy(fireImmediately: true)) {
+    yield await repo.getAll();
+  }
 });
 
 // ---------- Remote clients ----------
@@ -58,8 +94,9 @@ final musicBrainzApiProvider = Provider<MusicBrainzApi>((ref) => MusicBrainzApi(
 
 // ---------- Application layer (engines) ----------
 
-final scannerServiceProvider = Provider<ScannerService>((ref) {
-  return ScannerService(libraryRepository: ref.watch(libraryRepositoryProvider));
+final scannerServiceProvider = FutureProvider<ScannerService>((ref) async {
+  final libraryRepo = await ref.watch(libraryRepositoryProvider.future);
+  return ScannerService(libraryRepository: libraryRepo);
 });
 
 final songMatcherProvider = Provider<SongMatcher>((ref) {
@@ -77,18 +114,23 @@ final lyricsManagerProvider = Provider<LyricsManager>((ref) => LyricsManager());
 
 final duplicateDetectorProvider = Provider<DuplicateDetector>((ref) => DuplicateDetector());
 
-final playlistEngineProvider = Provider<PlaylistEngine>((ref) {
+final playlistEngineProvider = FutureProvider<PlaylistEngine>((ref) async {
+  final playlistRepo = await ref.watch(playlistRepositoryProvider.future);
+  final libraryRepo = await ref.watch(libraryRepositoryProvider.future);
+  final historyRepo = await ref.watch(historyRepositoryProvider.future);
   return PlaylistEngine(
-    playlistRepository: ref.watch(playlistRepositoryProvider),
-    libraryRepository: ref.watch(libraryRepositoryProvider),
-    historyRepository: ref.watch(historyRepositoryProvider),
+    playlistRepository: playlistRepo,
+    libraryRepository: libraryRepo,
+    historyRepository: historyRepo,
   );
 });
 
-final recommendationEngineProvider = Provider<RecommendationEngine>((ref) {
+final recommendationEngineProvider = FutureProvider<RecommendationEngine>((ref) async {
+  final historyRepo = await ref.watch(historyRepositoryProvider.future);
+  final libraryRepo = await ref.watch(libraryRepositoryProvider.future);
   return RecommendationEngine(
-    historyRepository: ref.watch(historyRepositoryProvider),
-    libraryRepository: ref.watch(libraryRepositoryProvider),
+    historyRepository: historyRepo,
+    libraryRepository: libraryRepo,
   );
 });
 
@@ -102,8 +144,9 @@ final playbackControllerProvider = Provider<PlaybackController>((ref) {
 
 // ---------- Presentation-facing state ----------
 
-final librarySongsProvider = StreamProvider<List<Song>>((ref) {
-  return ref.watch(libraryRepositoryProvider).watchAllSongs();
+final librarySongsProvider = StreamProvider<List<Song>>((ref) async* {
+  final repo = await ref.watch(libraryRepositoryProvider.future);
+  yield* repo.watchAllSongs();
 });
 
 final searchQueryProvider = StateProvider<String>((ref) => '');
@@ -111,14 +154,60 @@ final searchQueryProvider = StateProvider<String>((ref) => '');
 final searchResultsProvider = FutureProvider<List<Song>>((ref) async {
   final query = ref.watch(searchQueryProvider);
   if (query.isEmpty) return [];
-  return ref.watch(libraryRepositoryProvider).search(query);
+  final repo = await ref.watch(libraryRepositoryProvider.future);
+  return repo.search(query);
 });
 
-final accentColorProvider = StateProvider<Color>((ref) => AppTheme.defaultAccent);
+final sharedPreferencesProvider = FutureProvider<SharedPreferences>((ref) => SharedPreferences.getInstance());
+
+class AccentColorNotifier extends AsyncNotifier<Color> {
+  @override
+  Future<Color> build() async {
+    final prefs = await ref.watch(sharedPreferencesProvider.future);
+    final val = prefs.getInt('accent_color');
+    return val != null ? Color(val) : AppTheme.defaultAccent;
+  }
+
+  Future<void> setColor(Color c) async {
+    final prefs = await ref.watch(sharedPreferencesProvider.future);
+    await prefs.setInt('accent_color', c.value);
+    state = AsyncValue.data(c);
+  }
+}
+
+final accentColorProvider = AsyncNotifierProvider<AccentColorNotifier, Color>(AccentColorNotifier.new);
 
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
 
-final includedFoldersProvider = StateProvider<List<String>>((ref) => []);
+class IncludedFoldersNotifier extends AsyncNotifier<List<String>> {
+  @override
+  Future<List<String>> build() async {
+    final prefs = await ref.watch(sharedPreferencesProvider.future);
+    return prefs.getStringList('included_folders') ?? [];
+  }
+
+  Future<void> addFolder(String path) async {
+    final prefs = await ref.watch(sharedPreferencesProvider.future);
+    final current = state.value ?? [];
+    if (!current.contains(path)) {
+      final updated = [...current, path];
+      await prefs.setStringList('included_folders', updated);
+      state = AsyncValue.data(updated);
+    }
+  }
+
+  Future<void> removeFolder(String path) async {
+    final prefs = await ref.watch(sharedPreferencesProvider.future);
+    final current = state.value ?? [];
+    if (current.contains(path)) {
+      final updated = current.where((p) => p != path).toList();
+      await prefs.setStringList('included_folders', updated);
+      state = AsyncValue.data(updated);
+    }
+  }
+}
+
+final includedFoldersProvider = AsyncNotifierProvider<IncludedFoldersNotifier, List<String>>(IncludedFoldersNotifier.new);
 
 final wifiOnlyDownloadsProvider = StateProvider<bool>((ref) => true);
 

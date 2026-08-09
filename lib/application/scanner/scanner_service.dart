@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../data/repositories/library_repository.dart';
 
@@ -31,6 +33,7 @@ class ScannerService {
 
     final relevant = songs.where((s) {
       final path = s.data;
+      if (includedFolderPaths.isEmpty) return true;
       return includedFolderPaths.any((folder) => path.startsWith(folder));
     }).toList();
 
@@ -50,15 +53,30 @@ class ScannerService {
 
       if (existing == null) {
         newCount++;
-      } else if (existing.modified != modified || existing.sizeBytes != song.size) {
+      } else if (existing.modified != modified || existing.sizeBytes != song.size || existing.artworkPath == null) {
         // Modified timestamp is the primary signal; size is a cheap
         // secondary check that catches edge cases where a file was
         // replaced but the filesystem's mtime granularity/clock made the
-        // timestamp compare equal.
+        // timestamp compare equal. Missing artwork also triggers an update.
         updatedCount++;
       } else {
         unchangedCount++;
         continue; // skip the write entirely - this is the actual fix
+      }
+
+      String? localArtworkPath = existing?.artworkPath;
+      if (localArtworkPath == null) {
+        try {
+          final artworkBytes = await _audioQuery.queryArtwork(song.id, ArtworkType.AUDIO, size: 400);
+          if (artworkBytes != null && artworkBytes.isNotEmpty) {
+             final docsDir = await getApplicationDocumentsDirectory();
+             final artDir = Directory('${docsDir.path}/artworks');
+             if (!await artDir.exists()) await artDir.create(recursive: true);
+             final file = File('${artDir.path}/${song.id}.jpg');
+             await file.writeAsBytes(artworkBytes);
+             localArtworkPath = file.path;
+          }
+        } catch (_) {}
       }
 
       await libraryRepository.upsertScannedSong(
@@ -66,8 +84,12 @@ class ScannerService {
         filename: song.displayNameWOExt,
         duration: Duration(milliseconds: song.duration ?? 0),
         modified: modified,
-        bitrate: song.bitRate,
+        title: song.title,
+        artist: (song.artist == null || song.artist == '<unknown>') ? null : song.artist,
+        album: (song.album == null || song.album == '<unknown>') ? null : song.album,
+        bitrate: null,
         sizeBytes: song.size,
+        artworkPath: localArtworkPath,
       );
     }
 

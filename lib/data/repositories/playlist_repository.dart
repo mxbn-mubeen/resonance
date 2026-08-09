@@ -66,4 +66,13 @@ class PlaylistRepository {
       await isar.playlistRecords.delete(int.parse(playlistId));
     });
   }
+
+  Future<void> rename(String playlistId, String newName) async {
+    await isar.writeTxn(() async {
+      final rec = await isar.playlistRecords.get(int.parse(playlistId));
+      if (rec == null) return;
+      rec.name = newName;
+      await isar.playlistRecords.put(rec);
+    });
+  }
 }

@@ -9,6 +9,7 @@ import '../../domain/entities/song.dart';
 class PlaybackController extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   List<Song> _queue = [];
+  ConcatenatingAudioSource? _playlist;
 
   PlaybackController() {
     _player.playbackEventStream.listen(_broadcastState);
@@ -29,10 +30,12 @@ class PlaybackController extends BaseAudioHandler with QueueHandler, SeekHandler
   }
 
   AudioPlayer get rawPlayer => _player;
+  List<Song> get currentQueue => List.unmodifiable(_queue);
+  Stream<int?> get currentIndexStream => _player.currentIndexStream;
 
   Future<void> loadQueue(List<Song> songs, {int startIndex = 0}) async {
-    _queue = songs;
-    final playlist = ConcatenatingAudioSource(
+    _queue = List<Song>.from(songs);
+    _playlist = ConcatenatingAudioSource(
       children: songs
           .map((s) => AudioSource.uri(Uri.file(s.path),
               tag: MediaItem(
@@ -45,12 +48,9 @@ class PlaybackController extends BaseAudioHandler with QueueHandler, SeekHandler
               )))
           .toList(),
     );
-    final mediaItems = playlist.sequence.map((s) => s.tag as MediaItem).toList();
-    await _player.setAudioSource(playlist, initialIndex: startIndex);
+    final mediaItems = _playlist!.sequence.map((s) => s.tag as MediaItem).toList();
+    await _player.setAudioSource(_playlist!, initialIndex: startIndex);
     queue.add(mediaItems);
-    // Set the notification content immediately - don't wait for
-    // currentIndexStream's first event, which can lag behind setAudioSource
-    // and leave the notification blank for a moment right as playback starts.
     mediaItem.add(mediaItems[startIndex]);
   }
 
@@ -78,6 +78,21 @@ class PlaybackController extends BaseAudioHandler with QueueHandler, SeekHandler
   @override
   Future<void> seek(Duration position) => _player.seek(position);
 
+  @override
+  Future<void> skipToQueueItem(int index) => _player.seek(Duration.zero, index: index);
+
+  /// Reorders the queue live — uses ConcatenatingAudioSource.move() which
+  /// does NOT interrupt playback (just_audio handles it internally).
+  Future<void> reorderQueue(int oldIndex, int newIndex) async {
+    if (_playlist == null) return;
+    if (oldIndex < newIndex) newIndex -= 1;
+    // Move in the audio source (live, no interruption)
+    await _playlist!.move(oldIndex, newIndex);
+    // Mirror in our local list
+    final song = _queue.removeAt(oldIndex);
+    _queue.insert(newIndex, song);
+  }
+
   Future<void> setSpeed(double speed) => _player.setSpeed(speed);
 
   Future<void> setShuffleEnabled(bool enabled) async {
@@ -85,7 +100,21 @@ class PlaybackController extends BaseAudioHandler with QueueHandler, SeekHandler
     if (enabled) await _player.shuffle();
   }
 
-  Future<void> setRepeatMode(LoopMode mode) => _player.setLoopMode(mode);
+  @override
+  Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
+    switch (repeatMode) {
+      case AudioServiceRepeatMode.none:
+        await _player.setLoopMode(LoopMode.off);
+        break;
+      case AudioServiceRepeatMode.one:
+        await _player.setLoopMode(LoopMode.one);
+        break;
+      case AudioServiceRepeatMode.all:
+      case AudioServiceRepeatMode.group:
+        await _player.setLoopMode(LoopMode.all);
+        break;
+    }
+  }
 
   /// Sleep timer: stop playback after [duration] elapses.
   Future<void> setSleepTimer(Duration duration) async {

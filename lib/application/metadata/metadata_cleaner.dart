@@ -24,7 +24,7 @@ class MetadataCleaner {
     // leave a dangling "com" behind after separator normalization.
     for (final site in [...kWebsiteBlacklist, ...extraBlacklist]) {
       result = result.replaceAll(
-        RegExp('${RegExp.escape(site)}\\.?(com|in|net|org|co)?\\b', caseSensitive: false),
+        RegExp('${RegExp.escape(site)}\\.?(com|in|net|org|co|dev)?\\b', caseSensitive: false),
         '',
       );
     }

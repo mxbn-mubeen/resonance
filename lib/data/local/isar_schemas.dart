@@ -92,3 +92,39 @@ class PlaylistRecord {
   bool isAuto = false;
   bool isAiGenerated = false;
 }
+
+/// Tracks metadata fetch runs so the user can review history.
+@collection
+class MetadataFetchHistoryRecord {
+  Id id = Isar.autoIncrement;
+
+  late DateTime ranAt;
+  int totalProcessed = 0;
+  int totalUpdated = 0;
+  int totalNoMatch = 0;
+  int totalErrors = 0;
+  String? firstError;
+}
+
+/// Tracks Library Health report runs.
+@collection
+class LibraryHealthHistoryRecord {
+  Id id = Isar.autoIncrement;
+
+  late DateTime ranAt;
+  int totalSongs = 0;
+  int missingTags = 0;
+  int brokenArtwork = 0;
+  int duplicates = 0;
+}
+
+/// Tracks recent search queries for the user.
+@collection
+class SearchHistoryRecord {
+  Id id = Isar.autoIncrement;
+  
+  @Index(unique: true, replace: true)
+  late String query;
+  
+  late DateTime searchedAt;
+}

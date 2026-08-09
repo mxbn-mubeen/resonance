@@ -57,9 +57,13 @@ class LibraryRepository {
     required String filename,
     required Duration duration,
     required DateTime modified,
+    String? title,
+    String? artist,
+    String? album,
     int? bitrate,
     String? codec,
     int? sizeBytes,
+    String? artworkPath,
   }) async {
     await isar.writeTxn(() async {
       final existing =
@@ -70,9 +74,15 @@ class LibraryRepository {
         ..filename = filename
         ..durationMs = duration.inMilliseconds
         ..modified = modified
+        ..title = title ?? filename
+        ..artist = artist
+        ..album = album
         ..bitrate = bitrate
         ..codec = codec
         ..sizeBytes = sizeBytes;
+      if (artworkPath != null) {
+        record.artworkPath = artworkPath;
+      }
       await isar.songRecords.put(record);
     });
   }

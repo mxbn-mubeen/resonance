@@ -13,6 +13,7 @@ class ItunesApi {
   Future<List<Map<String, dynamic>>> search({
     required String term,
     int limit = 5,
+    String country = 'in', // Default to India for Tamil/regional music coverage
   }) async {
     final response = await _dio.get(
       'https://itunes.apple.com/search',
@@ -21,6 +22,7 @@ class ItunesApi {
         'media': 'music',
         'entity': 'song',
         'limit': limit,
+        'country': country,
       },
     );
     final results = (response.data['results'] as List?) ?? [];

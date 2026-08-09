@@ -1,12 +1,14 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:audio_service/audio_service.dart';
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/playback/playback_controller.dart';
 import '../../core/di/providers.dart';
-import '../equalizer/equalizer_screen.dart';
+import 'components/player_controls.dart';
+import 'components/player_secondary_controls.dart';
 
 /// Cinematic now-playing screen:
 /// - Backdrop tint is the album art's extracted dominant/muted color
@@ -80,7 +82,7 @@ class PlayerScreen extends ConsumerWidget {
   }
 }
 
-class _PlayerContent extends StatelessWidget {
+class _PlayerContent extends ConsumerStatefulWidget {
   final MediaItem? item;
   final PlaybackController controller;
   final String? artworkPath;
@@ -88,13 +90,34 @@ class _PlayerContent extends StatelessWidget {
   const _PlayerContent({required this.item, required this.controller, required this.artworkPath});
 
   @override
+  ConsumerState<_PlayerContent> createState() => _PlayerContentState();
+}
+
+class _PlayerContentState extends ConsumerState<_PlayerContent> {
+  bool _shuffleEnabled = false;
+  int _repeatMode = 0;
+
+  void _toggleShuffle() {
+    final next = !_shuffleEnabled;
+    setState(() => _shuffleEnabled = next);
+    widget.controller.setShuffleEnabled(next);
+  }
+
+  void _toggleRepeat() {
+    final next = (_repeatMode + 1) % 3;
+    setState(() => _repeatMode = next);
+    final mode = [AudioServiceRepeatMode.none, AudioServiceRepeatMode.all, AudioServiceRepeatMode.one][next];
+    widget.controller.setRepeatMode(mode);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<PlaybackState>(
-      stream: controller.playbackState,
+      stream: widget.controller.playbackState,
       builder: (context, stateSnapshot) {
         final playing = stateSnapshot.data?.playing ?? false;
         final position = stateSnapshot.data?.updatePosition ?? Duration.zero;
-        final total = item?.duration ?? Duration.zero;
+        final total = widget.item?.duration ?? Duration.zero;
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(32, 8, 32, 24),
@@ -108,11 +131,6 @@ class _PlayerContent extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              // 3D-tilted album art card - a Matrix4 with a small
-              // perspective entry (row 3, col 2) plus Y/X rotation. Flat
-              // CSS-style "transform: rotateY()" doesn't exist in Flutter;
-              // the 0.0015 perspective term is what makes the rotation
-              // read as depth instead of a sheared rectangle.
               Transform(
                 alignment: Alignment.center,
                 transform: Matrix4.identity()
@@ -127,22 +145,60 @@ class _PlayerContent extends StatelessWidget {
                     color: Colors.white.withOpacity(0.12),
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: artworkPath != null
-                      ? Image.file(File(artworkPath!), fit: BoxFit.cover)
+                  child: widget.artworkPath != null
+                      ? Image.file(File(widget.artworkPath!), fit: BoxFit.cover)
                       : const Icon(Icons.music_note, size: 72, color: Colors.white),
                 ),
               ),
               const Spacer(),
-              Text(
-                item?.title ?? 'Nothing playing',
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Colors.white),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                item?.artist ?? '',
-                style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.75)),
-                textAlign: TextAlign.center,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const SizedBox(width: 48), // Spacer to balance the heart icon
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Text(
+                          widget.item?.title ?? 'Nothing playing',
+                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Colors.white),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.item?.artist ?? '',
+                          style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.75)),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(
+                    width: 48,
+                    child: Builder(
+                      builder: (context) {
+                        final allSongs = ref.watch(librarySongsProvider).valueOrNull ?? [];
+                        final song = allSongs.firstWhereOrNull((s) => s.id == widget.item?.id);
+                        if (song == null) return const SizedBox.shrink();
+
+                        final isFavorite = song.favorite;
+                        return IconButton(
+                          icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border,
+                              color: isFavorite ? Colors.pinkAccent : Colors.white70),
+                          onPressed: () async {
+                            final repo = await ref.read(libraryRepositoryProvider.future);
+                            await repo.toggleFavorite(song.id, !isFavorite);
+                            ref.invalidate(librarySongsProvider);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 24),
               SliderTheme(
@@ -157,66 +213,42 @@ class _PlayerContent extends StatelessWidget {
                       : 0,
                   max: total.inMilliseconds > 0 ? total.inMilliseconds.toDouble() : 1,
                   onChanged: total.inMilliseconds > 0
-                      ? (v) => controller.seek(Duration(milliseconds: v.round()))
+                      ? (v) => widget.controller.seek(Duration(milliseconds: v.round()))
                       : null,
                 ),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.shuffle, color: Colors.white70),
-                    onPressed: () {},
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.skip_previous, color: Colors.white),
-                    onPressed: controller.skipToPrevious,
-                  ),
-                  IconButton(
-                    iconSize: 56,
-                    icon: Icon(
-                      playing ? Icons.pause_circle_filled : Icons.play_circle_fill,
-                      color: Colors.white,
-                    ),
-                    onPressed: playing ? controller.pause : controller.play,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.skip_next, color: Colors.white),
-                    onPressed: controller.skipToNext,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.repeat, color: Colors.white70),
-                    onPressed: () {},
-                  ),
-                ],
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(_formatDuration(position), style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    Text(_formatDuration(total), style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                  ],
+                ),
+              ),
+              // ── Transport controls ──────────────────────────────────────
+              PlayerControls(
+                controller: widget.controller,
+                shuffleEnabled: _shuffleEnabled,
+                repeatMode: _repeatMode,
+                playing: playing,
+                onToggleShuffle: _toggleShuffle,
+                onToggleRepeat: _toggleRepeat,
               ),
               const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  TextButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.speed, color: Colors.white70, size: 18),
-                    label: const Text('Speed', style: TextStyle(color: Colors.white70)),
-                  ),
-                  TextButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.bedtime, color: Colors.white70, size: 18),
-                    label: const Text('Sleep timer', style: TextStyle(color: Colors.white70)),
-                  ),
-                  TextButton.icon(
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const EqualizerScreen()),
-                    ),
-                    icon: const Icon(Icons.equalizer, color: Colors.white70, size: 18),
-                    label: const Text('Equalizer', style: TextStyle(color: Colors.white70)),
-                  ),
-                ],
-              ),
+              // ── Secondary controls ──────────────────────────────────────
+              PlayerSecondaryControls(controller: widget.controller),
             ],
           ),
         );
       },
     );
+  }
+
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes;
+    final seconds = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
   }
 }

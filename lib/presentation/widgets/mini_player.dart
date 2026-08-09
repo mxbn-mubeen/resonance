@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:collection/collection.dart';
 
 import '../../core/di/providers.dart';
 import '../player/player_screen.dart';
@@ -15,6 +16,7 @@ class MiniPlayer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final controller = ref.watch(playbackControllerProvider);
+    final allSongs = ref.watch(librarySongsProvider).valueOrNull ?? [];
 
     return StreamBuilder<MediaItem?>(
       stream: controller.mediaItem,
@@ -24,6 +26,8 @@ class MiniPlayer extends ConsumerWidget {
           stream: controller.playbackState,
           builder: (context, stateSnapshot) {
             final playing = stateSnapshot.data?.playing ?? false;
+            final song = allSongs.firstWhereOrNull((s) => s.id == item?.id);
+            final isFavorite = song?.favorite ?? false;
 
             return Material(
               color: theme.colorScheme.surfaceContainer,
@@ -61,6 +65,15 @@ class MiniPlayer extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (song != null)
+                        IconButton(
+                          icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border, size: 22),
+                          onPressed: () async {
+                            final repo = await ref.read(libraryRepositoryProvider.future);
+                            await repo.toggleFavorite(song.id, !isFavorite);
+                            ref.invalidate(librarySongsProvider);
+                          },
+                        ),
                       IconButton(
                         icon: Icon(playing ? Icons.pause : Icons.play_arrow),
                         onPressed: item == null ? null : (playing ? controller.pause : controller.play),

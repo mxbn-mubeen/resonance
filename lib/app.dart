@@ -30,11 +30,11 @@ class _OfflineMusicAppState extends ConsumerState<OfflineMusicApp> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = ref.watch(accentColorProvider);
+    final accent = ref.watch(accentColorProvider).valueOrNull ?? AppTheme.defaultAccent;
     final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp(
-      title: 'Offline Music Platform',
+      title: 'Resonance',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(accent),
       darkTheme: AppTheme.dark(accent),
