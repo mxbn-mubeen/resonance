@@ -75,6 +75,51 @@ class ArtworkManager {
     if (await artworkDir.exists()) {
       await artworkDir.delete(recursive: true);
     }
+
+    // Cleanup for a previous inconsistency: embedded-ID3 artwork used to be
+    // written directly to {ApplicationDocuments}/artworks (a different
+    // directory than downloaded artwork's {ApplicationSupport}/artwork),
+    // so clearCache() silently missed it. Both paths now go through
+    // saveCompressedBytes()/downloadAndCache() into the same directory
+    // above, but this sweep also cleans up anything saved under the old
+    // location on existing installs, so "Clear artwork cache" actually
+    // clears everything regardless of when it was saved.
+    try {
+      final docsDir = await getApplicationDocumentsDirectory();
+      final legacyDir = Directory('${docsDir.path}/artworks');
+      if (await legacyDir.exists()) {
+        await legacyDir.delete(recursive: true);
+      }
+    } catch (_) {
+      // Best-effort cleanup - don't fail the whole clear operation over it.
+    }
+  }
+
+  /// Resize + JPEG-compress raw image bytes AND save them to the same
+  /// artwork directory downloadAndCache() uses. This is what embedded-ID3
+  /// artwork extraction should call instead of writing to its own
+  /// directory - keeping exactly one artwork location means clearCache()
+  /// (and any future cache-size reporting) only ever has to look in one
+  /// place.
+  Future<String?> saveCompressedBytes(
+    List<int> rawBytes,
+    String cacheKey, {
+    int maxDimension = 600,
+    int jpegQuality = 85,
+  }) async {
+    try {
+      final compressed = await compressBytes(rawBytes, maxDimension: maxDimension, jpegQuality: jpegQuality);
+      final dir = await getApplicationSupportDirectory();
+      final artworkDir = Directory('${dir.path}/artwork');
+      if (!await artworkDir.exists()) {
+        await artworkDir.create(recursive: true);
+      }
+      final targetFile = File('${artworkDir.path}/$cacheKey.jpg');
+      await targetFile.writeAsBytes(compressed);
+      return targetFile.path;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Resize + JPEG-compress raw image bytes (e.g. extracted from ID3 tags).
@@ -104,4 +149,3 @@ class ArtworkManager {
     }
   }
 }
-

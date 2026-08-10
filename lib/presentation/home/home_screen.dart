@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/di/providers.dart';
 import 'components/home_recent_section.dart';
+import 'components/home_recommended_section.dart';
 import 'components/home_empty_prompt.dart';
 import 'components/home_playlists_section.dart';
 
@@ -30,7 +31,8 @@ class HomeScreen extends ConsumerWidget {
               Text('Recently added', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
               const HomeRecentSection(),
-              // TODO(home_screen): AI mood rails wait on RecommendationEngine.
+              const SizedBox(height: 24),
+              const HomeRecommendedSection(),
               const SizedBox(height: 24),
               Text('My Playlists', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),

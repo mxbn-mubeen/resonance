@@ -2,9 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../application/metadata/metadata_fetch_runner.dart';
 import '../../../core/di/providers.dart';
 import '../../../data/local/isar_schemas.dart';
-import 'settings_metadata_section.dart';
 
 class SettingsHealthSection extends ConsumerWidget {
   const SettingsHealthSection({super.key});
@@ -154,8 +154,7 @@ class SettingsHealthSection extends ConsumerWidget {
               label: const Text('Fix now'),
               onPressed: () {
                 Navigator.pop(ctx);
-                // Delegate to SettingsMetadataSection's fetch method via a fresh instance
-                SettingsMetadataSection().runFetchFromHealthReport(context, ref);
+                MetadataFetchRunner.run(context, ref);
               },
             ),
         ],

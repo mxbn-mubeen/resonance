@@ -42,4 +42,32 @@ class MetadataRepository {
       source: rec.source,
     );
   }
+
+  /// Batch lookup, keyed by metadata record id (as a String, matching
+  /// Song.metadataId). Used by PlaylistEngine for genre-based mood
+  /// playlists and decade splits, which need to join potentially hundreds
+  /// of songs against their metadata in one pass rather than one query per
+  /// song.
+  Future<Map<String, MetadataResult>> getByIds(List<String> ids) async {
+    final intIds = ids.map(int.tryParse).whereType<int>().toSet().toList();
+    if (intIds.isEmpty) return {};
+    final records = await isar.metadataRecords.getAll(intIds);
+    final result = <String, MetadataResult>{};
+    for (final rec in records) {
+      if (rec == null) continue;
+      result[rec.id.toString()] = MetadataResult(
+        id: rec.id.toString(),
+        officialTitle: rec.officialTitle,
+        officialArtist: rec.officialArtist,
+        album: rec.album,
+        genre: rec.genre,
+        year: rec.year,
+        track: rec.track,
+        artworkUrl: rec.artworkUrl,
+        confidence: rec.confidence,
+        source: rec.source,
+      );
+    }
+    return result;
+  }
 }

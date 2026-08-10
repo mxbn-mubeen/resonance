@@ -32,6 +32,9 @@ class _OfflineMusicAppState extends ConsumerState<OfflineMusicApp> {
   Widget build(BuildContext context) {
     final accent = ref.watch(accentColorProvider).valueOrNull ?? AppTheme.defaultAccent;
     final themeMode = ref.watch(themeModeProvider);
+    // Activates the play-history logging subscription for the app's
+    // lifetime - see historyLoggerProvider's doc comment in providers.dart.
+    ref.watch(historyLoggerProvider);
 
     return MaterialApp(
       title: 'Resonance',

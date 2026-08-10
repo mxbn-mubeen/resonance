@@ -118,19 +118,60 @@ final playlistEngineProvider = FutureProvider<PlaylistEngine>((ref) async {
   final playlistRepo = await ref.watch(playlistRepositoryProvider.future);
   final libraryRepo = await ref.watch(libraryRepositoryProvider.future);
   final historyRepo = await ref.watch(historyRepositoryProvider.future);
+  final metadataRepo = await ref.watch(metadataRepositoryProvider.future);
   return PlaylistEngine(
     playlistRepository: playlistRepo,
     libraryRepository: libraryRepo,
     historyRepository: historyRepo,
+    metadataRepository: metadataRepo,
   );
+});
+
+/// Activates a background subscription that logs play history whenever the
+/// current track changes. This is the actual fix for "Recently Played"
+/// (PlaylistEngine.recentlyPlayed) ever returning results -
+/// `historyRepository.logPlay()` previously existed but was never called
+/// from anywhere. Centralizing it here means every play-start path
+/// (Library, Search, Playlists, Home, Group detail...) gets history
+/// logging for free instead of each screen needing to remember to call it
+/// individually.
+///
+/// Must be activated once - see `ref.watch(historyLoggerProvider)` in
+/// app.dart's build method - a Provider with no watchers never runs.
+final historyLoggerProvider = Provider<void>((ref) {
+  final controller = ref.watch(playbackControllerProvider);
+  String? lastLoggedSongId;
+
+  final subscription = controller.mediaItem.listen((item) async {
+    if (item == null || item.id == lastLoggedSongId) return;
+    lastLoggedSongId = item.id;
+
+    final historyRepo = await ref.read(historyRepositoryProvider.future);
+    await historyRepo.logPlay(PlayHistoryEntry(
+      songId: item.id,
+      playedAt: DateTime.now(),
+      // TODO(history_logger): true listened-duration/skipped/completed
+      // tracking needs to watch playbackState until the NEXT track change
+      // (or pause+long-idle) and compute the delta - logging zero/false
+      // here is honest about what's actually measured today, not a
+      // fabricated value.
+      listenedDuration: Duration.zero,
+      skipped: false,
+      completed: false,
+    ));
+  });
+
+  ref.onDispose(subscription.cancel);
 });
 
 final recommendationEngineProvider = FutureProvider<RecommendationEngine>((ref) async {
   final historyRepo = await ref.watch(historyRepositoryProvider.future);
   final libraryRepo = await ref.watch(libraryRepositoryProvider.future);
+  final metadataRepo = await ref.watch(metadataRepositoryProvider.future);
   return RecommendationEngine(
     historyRepository: historyRepo,
     libraryRepository: libraryRepo,
+    metadataRepository: metadataRepo,
   );
 });
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../application/playback/playback_controller.dart';
-import '../equalizer/equalizer_screen.dart';
+import '../../equalizer/equalizer_screen.dart';
 import 'queue_sheet.dart';
 
 class PlayerSecondaryControls extends StatefulWidget {

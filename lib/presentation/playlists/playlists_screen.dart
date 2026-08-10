@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/di/providers.dart';
 import '../../domain/entities/library_entities.dart';
-import '../../domain/entities/song.dart';
+import '../library/group_detail_screen.dart';
 import '../widgets/playlist_cover_widget.dart';
 import 'playlist_detail_screen.dart';
+import 'smart_playlist_definitions.dart';
 
 class PlaylistsScreen extends ConsumerWidget {
   const PlaylistsScreen({super.key});
@@ -39,39 +40,9 @@ class PlaylistsScreen extends ConsumerWidget {
                 error: (e, st) => Center(child: Text('Error: $e')),
               ),
           const _SectionHeader('Automatic'),
-          ListTile(
-              leading: const Icon(Icons.trending_up),
-              title: const Text('Most Played'),
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Playlist view coming soon!')))),
-          ListTile(
-              leading: const Icon(Icons.fiber_new),
-              title: const Text('Recently Added'),
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Playlist view coming soon!')))),
-          ListTile(
-              leading: const Icon(Icons.history),
-              title: const Text('Recently Played'),
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Playlist view coming soon!')))),
-          ListTile(
-              leading: const Icon(Icons.new_releases),
-              title: const Text('Never Played'),
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Playlist view coming soon!')))),
+          for (final def in kAutomaticPlaylistDefs) _AutoPlaylistTile(def: def),
           const _SectionHeader('AI Generated'),
-          ListTile(
-              leading: const Icon(Icons.nightlife),
-              title: const Text('Night Drive'),
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('AI Moods coming soon!')))),
-          ListTile(
-              leading: const Icon(Icons.spa),
-              title: const Text('Relax'),
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('AI Moods coming soon!')))),
-          ListTile(
-              leading: const Icon(Icons.fitness_center),
-              title: const Text('Workout'),
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('AI Moods coming soon!')))),
-          ListTile(
-              leading: const Icon(Icons.center_focus_strong),
-              title: const Text('Focus'),
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('AI Moods coming soon!')))),
+          for (final def in kAiPlaylistDefs) _AutoPlaylistTile(def: def),
         ],
       ),
     );
@@ -100,6 +71,62 @@ class PlaylistsScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// One row for an Automatic/AI playlist. Resolves its song list on tap
+/// (not eagerly for every tile on screen build - these can involve genre
+/// joins across the whole library) and opens the shared GroupDetailScreen,
+/// same one Library's tabs and the Home rail both use.
+class _AutoPlaylistTile extends ConsumerStatefulWidget {
+  final SmartPlaylistDef def;
+
+  const _AutoPlaylistTile({required this.def});
+
+  @override
+  ConsumerState<_AutoPlaylistTile> createState() => _AutoPlaylistTileState();
+}
+
+class _AutoPlaylistTileState extends ConsumerState<_AutoPlaylistTile> {
+  bool _loading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(widget.def.icon),
+      title: Text(widget.def.title),
+      subtitle: Text(widget.def.subtitle, style: const TextStyle(fontSize: 11)),
+      trailing: _loading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : null,
+      onTap: _loading ? null : () => openSmartPlaylist(context, ref, widget.def),
+    );
+  }
+}
+
+/// Shared navigation logic - resolves the song list and opens
+/// GroupDetailScreen, or shows a snackbar if nothing matched. Used by both
+/// the Playlists tab tiles and the Home rail's smart-playlist cards so the
+/// tap behavior (loading state, empty-result message) is identical
+/// everywhere instead of being reimplemented per surface.
+Future<void> openSmartPlaylist(BuildContext context, WidgetRef ref, SmartPlaylistDef def) async {
+  final engine = await ref.read(playlistEngineProvider.future);
+  final songs = await def.loader(engine);
+  if (!context.mounted) return;
+
+  if (songs.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('No songs match "${def.title}" yet')),
+    );
+    return;
+  }
+
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => GroupDetailScreen(
+        title: def.title,
+        songs: songs,
+        subtitle: '${songs.length} songs',
+      ),
+    ),
+  );
 }
 
 class _SectionHeader extends StatelessWidget {
