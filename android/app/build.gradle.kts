@@ -7,7 +7,15 @@ plugins {
 
 android {
     namespace = "com.mxbn.resonance"
-    compileSdk = flutter.compileSdkVersion
+    // Pinned explicitly rather than `flutter.compileSdkVersion` - that
+    // expression's resolved value depends on exactly which Flutter version
+    // is installed on the build machine (local or CI), and isar_flutter_libs
+    // bundles resources referencing android:attr/lStar (added in API 31).
+    // A too-low or inconsistently-resolved compileSdk causes AAPT to fail
+    // resource linking with "resource android:attr/lStar not found" - this
+    // pin makes the build deterministic across every machine/CI runner
+    // regardless of which Flutter version happens to be installed there.
+    compileSdk = 35
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -25,7 +33,7 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
