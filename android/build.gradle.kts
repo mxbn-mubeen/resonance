@@ -47,8 +47,8 @@ subprojects {
     }
 
     project.tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-        kotlinOptions {
-            jvmTarget = targetJvm
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(targetJvm))
         }
     }
     project.tasks.withType<JavaCompile>().configureEach {
