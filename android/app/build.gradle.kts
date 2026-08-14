@@ -23,9 +23,9 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
+    // Kotlin jvmTarget is set for every subproject (including :app) by the
+    // root android/build.gradle.kts's compilerOptions block - no need to
+    // duplicate it here.
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
