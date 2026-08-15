@@ -15,7 +15,12 @@ android {
     // resource linking with "resource android:attr/lStar not found" - this
     // pin makes the build deterministic across every machine/CI runner
     // regardless of which Flutter version happens to be installed there.
-    compileSdk = 35
+    //
+    // Bumped 35 -> 36: androidx.core:core:1.18.0 (a transitive dependency)
+    // requires compileSdk 36+. If a future dependency bump demands a
+    // higher number again, the Gradle error will say "requires ... compile
+    // against version N or later" - match compileSdk/targetSdk to N.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -33,7 +38,7 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
-        targetSdk = 35
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
