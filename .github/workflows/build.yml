@@ -17,7 +17,7 @@ jobs:
       # release and we always get a cache hit after the first run.
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
+          flutter-version: '3.47.0'
           channel: stable
           cache: true
 
