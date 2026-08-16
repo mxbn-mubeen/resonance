@@ -41,6 +41,10 @@ dependencies:
   # Background work (folder monitor, matcher, artwork/lyrics downloader queues)
   workmanager: ^0.9.0
 
+  # Notifications — used by the WorkManager background isolate to post
+  # completion alerts after a background metadata fetch finishes.
+  flutter_local_notifications: ^18.0.1
+
   # Utilities
   equatable: ^2.0.5
   collection: ^1.18.0

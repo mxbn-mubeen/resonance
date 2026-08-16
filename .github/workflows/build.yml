@@ -1,11 +1,5 @@
 name: Build APK
 
-# Runs on every push to main, every pull request, and can be triggered
-# manually from the Actions tab (workflow_dispatch). This is the first
-# place in this project's history that actually compiles the code - every
-# fix in this repo up to now was hand-verified logic (Python ports, manual
-# API cross-checks) but never a real `flutter build`, since no Flutter SDK
-# was available in the environment doing the editing.
 on:
   push:
     branches: [main]
@@ -19,25 +13,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pin exact Flutter version so the cache key never changes on a stable
+      # release and we always get a cache hit after the first run.
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.24.0'
           channel: stable
           cache: true
+
+      # Cache pub packages keyed on pubspec.lock so it only re-downloads when
+      # actual dependencies change. Also caches .dart_tool so build_runner
+      # skips regenerating files that haven't changed.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
+          restore-keys: ${{ runner.os }}-pub-
+
+      # Cache Gradle wrapper + caches so the Android build system doesn't
+      # download itself from scratch on every run.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
 
       - name: Install dependencies
         run: flutter pub get
 
-      # REQUIRED: isar_schemas.dart declares `part 'isar_schemas.g.dart';`
-      # but that generated file doesn't exist in the repo (nobody has run
-      # this locally yet) - the build fails immediately without this step.
+      # Regenerate Isar .g.dart files. With .dart_tool cached this only does
+      # real work when isar_schemas.dart actually changed.
       - name: Generate Isar code
         run: dart run build_runner build --delete-conflicting-outputs
 
-      # Catches real compile errors, unused imports, type mismatches -
-      # everything that's been impossible to verify without a Flutter SDK.
-      # This is set to continue on error so the workflow still produces a
-      # build/log even if analyze finds issues, rather than stopping short
-      # of the part that would tell you what actually broke.
       - name: Analyze
         run: flutter analyze
         continue-on-error: true
@@ -54,4 +66,4 @@ jobs:
         with:
           name: resonance-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 14
+          retention-days: 14
