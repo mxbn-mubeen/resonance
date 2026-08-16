@@ -23,6 +23,20 @@ subprojects {
     project.plugins.withId("com.android.library") {
         val library = project.extensions.getByType(com.android.build.gradle.LibraryExtension::class.java)
         library.buildToolsVersion = "34.0.0"
+        // THE FIX for the persistent "android:attr/lStar not found" error:
+        // isar_flutter_libs (and other plugin AARs) ship their OWN
+        // android/build.gradle with their OWN compileSdk setting, which is
+        // completely independent of :app's compileSdk - bumping :app's
+        // compileSdk to 36 does nothing to isar_flutter_libs's own
+        // verifyReleaseResources task, which runs against ITS OWN
+        // module-level compileSdk. Since isar_flutter_libs hasn't been
+        // updated since ~2023, its own compileSdk likely predates API 31
+        // (where android:attr/lStar was added), so AAPT2 fails to resolve
+        // it during that module's own resource verification - regardless
+        // of what :app is compiled against. Forcing every library
+        // subproject to compileSdk 36 here closes that gap at its actual
+        // source instead of only fixing :app.
+        library.compileSdk = 36
         if (library.namespace == null) {
              when (project.name) {
                  "isar_flutter_libs" -> library.namespace = "dev.isar.isar_flutter_libs"
