@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../application/metadata/metadata_fetch_runner.dart';
+import '../health_history_screen.dart';
 import '../../../core/di/providers.dart';
 import '../../../data/local/isar_schemas.dart';
 
@@ -162,53 +163,10 @@ class SettingsHealthSection extends ConsumerWidget {
     );
   }
 
-  Future<void> _showHealthHistory(BuildContext context, WidgetRef ref) async {
-    final historyRepo = await ref.read(libraryHealthHistoryRepositoryProvider.future);
-    final runs = await historyRepo.getRecentRuns();
-
-    if (!context.mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Library Health History'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: runs.isEmpty
-              ? const Text('No health scans yet. Tap "Run Library Health report" to start.')
-              : ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: runs.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final r = runs[i];
-                    final hasIssues = r.missingTags > 0 || r.brokenArtwork > 0 || r.duplicates > 0;
-                    return ListTile(
-                      dense: true,
-                      title: Text(_formatDate(r.ranAt.toLocal())),
-                      subtitle: Text(
-                        '${r.missingTags} missing tags · ${r.brokenArtwork} broken art · '
-                        '${r.duplicates} duplicates  (${r.totalSongs} total)',
-                      ),
-                      leading: Icon(
-                        hasIssues ? Icons.warning_amber : Icons.check_circle,
-                        color: hasIssues ? Colors.orange : Colors.green,
-                        size: 20,
-                      ),
-                    );
-                  },
-                ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-        ],
-      ),
+  void _showHealthHistory(BuildContext context, WidgetRef ref) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const HealthHistoryScreen()),
     );
-  }
-
-  static String _formatDate(DateTime dt) {
-    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} '
-        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 }
 

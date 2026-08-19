@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../../../application/metadata/metadata_fetch_runner.dart';
-import '../../../core/di/providers.dart';
+import '../metadata_history_screen.dart';
 
 class SettingsMetadataSection extends ConsumerWidget {
   const SettingsMetadataSection({super.key});
@@ -44,54 +43,9 @@ class SettingsMetadataSection extends ConsumerWidget {
     );
   }
 
-  Future<void> _showFetchHistory(BuildContext context, WidgetRef ref) async {
-    final historyRepo = await ref.read(metadataFetchHistoryRepositoryProvider.future);
-    final runs = await historyRepo.getRecentRuns();
-
-    if (!context.mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Metadata Fetch History'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: runs.isEmpty
-              ? const Text('No fetch runs yet. Tap "Fetch missing metadata now" to start.')
-              : ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: runs.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final r = runs[i];
-                    return ListTile(
-                      dense: true,
-                      title: Text(_formatDate(r.ranAt)),
-                      subtitle: Text(
-                        '${r.totalUpdated} updated · ${r.totalNoMatch} no match · '
-                        '${r.totalErrors} errors  (${r.totalProcessed} total)',
-                      ),
-                      leading: Icon(
-                        r.totalErrors > 0 ? Icons.warning_amber : Icons.check_circle,
-                        color: r.totalErrors > 0 ? Colors.orange : Colors.green,
-                        size: 20,
-                      ),
-                    );
-                  },
-                ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-        ],
-      ),
+  void _showFetchHistory(BuildContext context, WidgetRef ref) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const MetadataHistoryScreen()),
     );
-  }
-
-  static String _formatDate(DateTime dt) {
-    final local = dt.toLocal();
-    return '${local.day.toString().padLeft(2, '0')}/'
-        '${local.month.toString().padLeft(2, '0')}/${local.year} '
-        '${local.hour.toString().padLeft(2, '0')}:'
-        '${local.minute.toString().padLeft(2, '0')}';
   }
 }

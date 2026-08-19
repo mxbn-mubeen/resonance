@@ -37,7 +37,7 @@ class PlaylistCoverWidget extends ConsumerWidget {
 
   Widget _buildCover(BuildContext context, List<String?> paths) {
     // Filter valid paths
-    final valid = paths.where((p) => p != null && File(p!).existsSync()).toList();
+    final valid = paths.where((p) => p != null && File(p!).existsSync()).map((p) => p!).toList();
 
     if (valid.isEmpty) {
       return _gradientPlaceholder(context);

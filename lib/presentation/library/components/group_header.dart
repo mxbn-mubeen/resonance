@@ -76,8 +76,7 @@ class GroupHeader extends ConsumerWidget {
                 label: const Text('Shuffle'),
                 onPressed: () async {
                   if (songs.isNotEmpty) {
-                    final shuffled = List<Song>.from(songs)..shuffle();
-                    await ref.read(playbackControllerProvider).playSongs(shuffled);
+                    await ref.read(playbackControllerProvider).playSongs(songs, shuffle: true);
                     if (context.mounted) {
                       Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
                     }

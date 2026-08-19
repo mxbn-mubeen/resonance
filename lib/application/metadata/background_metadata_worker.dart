@@ -7,6 +7,9 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:workmanager/workmanager.dart';
 
+import 'metadata_fetch_result.dart';
+import 'song_metadata_processor.dart';
+
 import '../../core/constants/app_constants.dart';
 import '../../data/local/isar_schemas.dart';
 import '../../data/remote/itunes_api.dart';
@@ -28,6 +31,8 @@ const kMetadataFetchTaskName = 'fetchMissingMetadata';
 void callbackDispatcher() {
   Workmanager().executeTask((taskName, inputData) async {
     if (taskName != kMetadataFetchTaskName) return true;
+
+    final stopwatch = Stopwatch()..start();
 
     WidgetsFlutterBinding.ensureInitialized();
 
@@ -81,11 +86,16 @@ void callbackDispatcher() {
         artworkMgr: artworkMgr,
         maxDimension: 600,
         jpegQuality: 85,
+        stopwatch: stopwatch,
+        timeLimitMinutes: 9,
+        onProgress: (processed, total) {
+          BackgroundMetadataWorker.postProgressNotification(processed, total);
+        },
       );
 
       final record = MetadataFetchHistoryRecord()
         ..ranAt = DateTime.now()
-        ..totalProcessed = unknown.length
+        ..totalProcessed = result.processed
         ..totalUpdated = result.updated
         ..totalNoMatch = result.noMatch
         ..totalErrors = result.errors
@@ -93,26 +103,19 @@ void callbackDispatcher() {
       await historyRepo.saveRun(record);
 
       await BackgroundMetadataWorker.postNotification(result);
+      
+      // If we aborted due to time limit, tell WorkManager to reschedule a new task
+      // by returning false (meaning it failed/needs retry), but we use ExistingWorkPolicy.keep
+      // so we might want to just let it finish and rely on the user or a periodic task.
+      // Wait, returning false causes exponential backoff retry. This is actually good!
+      if (result.abortedByTimeout) {
+        return false;
+      }
     } finally {
       await isar.close();
     }
 
     return true;
-  });
-}
-
-/// Result of a completed fetch loop. Shared between foreground and background.
-class MetadataFetchResult {
-  final int updated;
-  final int noMatch;
-  final int errors;
-  final String? firstError;
-
-  const MetadataFetchResult({
-    required this.updated,
-    required this.noMatch,
-    required this.errors,
-    this.firstError,
   });
 }
 
@@ -129,107 +132,84 @@ class BackgroundMetadataWorker {
     required ArtworkManager artworkMgr,
     required int maxDimension,
     required int jpegQuality,
+    Stopwatch? stopwatch,
+    int? timeLimitMinutes,
+    Function(int processed, int total)? onProgress,
   }) async {
+    int processed = 0;
     int updated = 0;
     int noMatch = 0;
     int errors = 0;
     String? firstError;
+    bool abortedByTimeout = false;
+
+    // Show initial notification before processing starts
+    if (onProgress != null) {
+      onProgress(0, songs.length);
+    }
 
     for (final song in songs) {
+      if (stopwatch != null && timeLimitMinutes != null) {
+        if (stopwatch.elapsed.inMinutes >= timeLimitMinutes) {
+          abortedByTimeout = true;
+          break;
+        }
+      }
       try {
-        dynamic result;
-        try {
-          result = await matcher.match(
-            rawFilename: song.filename,
-            knownArtist: song.artist,
-            knownAlbum: song.album,
-            knownDuration: song.duration,
-          );
-        } catch (_) {
-          result = null;
-        }
-
-        String finalTitle = song.title ?? song.filename;
-        String finalArtist = song.artist ?? 'Unknown Artist';
-        String? finalAlbum = song.album;
-
-        if (result != null) {
-          finalTitle = result.officialTitle;
-          finalArtist = result.officialArtist;
-          finalAlbum = result.album;
-        } else {
-          noMatch++;
-          try {
-            final metadata = readMetadata(File(song.path), getImage: false);
-            final localArtist = metadata.artist?.trim() ?? '';
-            final localTitle = metadata.title?.trim() ?? '';
-            final localAlbum = metadata.album?.trim() ?? '';
-            if (localTitle.isNotEmpty) finalTitle = MetadataCleaner.clean(localTitle);
-            if (localArtist.isNotEmpty &&
-                localArtist.toLowerCase() != 'unknown artist') {
-              finalArtist = MetadataCleaner.clean(localArtist);
-            }
-            if (localAlbum.isNotEmpty) finalAlbum = MetadataCleaner.clean(localAlbum);
-          } catch (_) {
-            finalTitle = MetadataCleaner.clean(finalTitle);
-            finalArtist = MetadataCleaner.clean(finalArtist);
-          }
-        }
-
-        String? localArtworkPath = song.artworkPath;
-        if (localArtworkPath == null) {
-          try {
-            final metadataImg = readMetadata(File(song.path), getImage: true);
-            final pictures = metadataImg.pictures;
-            if (pictures.isNotEmpty) {
-              final rawBytes = pictures.first.bytes;
-              if (rawBytes.isNotEmpty) {
-                localArtworkPath = await artworkMgr.saveCompressedBytes(
-                  rawBytes,
-                  song.id,
-                  maxDimension: maxDimension,
-                  jpegQuality: jpegQuality,
-                );
-              }
-            }
-          } catch (_) {}
-
-          if (localArtworkPath == null &&
-              result != null &&
-              result.artworkUrl != null) {
-            try {
-              localArtworkPath = await artworkMgr.downloadAndCache(
-                artworkUrl: result.artworkUrl!,
-                cacheKey: song.id,
-                maxDimension: maxDimension,
-                jpegQuality: jpegQuality,
-              );
-            } catch (_) {}
-          }
-        }
-
-        await libraryRepo.upsertScannedSong(
-          path: song.path,
-          filename: song.filename,
-          duration: song.duration,
-          modified: song.modified,
-          title: finalTitle,
-          artist: finalArtist,
-          album: finalAlbum,
-          artworkPath: localArtworkPath,
+        final songResult = await SongMetadataProcessor.processSong(
+          song: song,
+          libraryRepo: libraryRepo,
+          matcher: matcher,
+          artworkMgr: artworkMgr,
+          maxDimension: maxDimension,
+          jpegQuality: jpegQuality,
         );
+        if (songResult.isNoMatch) {
+          noMatch++;
+        }
         updated++;
       } catch (e) {
         errors++;
         firstError ??= e.toString();
       }
+      
+      processed++;
+      // Update progress frequently (every 3 songs) or on the very last song
+      if ((processed % 3 == 0 || processed == songs.length) && onProgress != null) {
+        onProgress(processed, songs.length);
+      }
     }
 
     return MetadataFetchResult(
+      processed: processed,
       updated: updated,
       noMatch: noMatch,
       errors: errors,
       firstError: firstError,
+      abortedByTimeout: abortedByTimeout,
+    );
+  }
+
+  static Future<void> postProgressNotification(int processed, int total) async {
+    final plugin = FlutterLocalNotificationsPlugin();
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    await plugin.initialize(const InitializationSettings(android: androidInit));
+
+    await plugin.show(
+      1001,
+      'Fetching Metadata',
+      'Processed $processed / $total songs...',
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'resonance_metadata',
+          'Resonance Metadata',
+          channelDescription: 'Background metadata fetch status',
+          importance: Importance.low,
+          priority: Priority.low,
+          showProgress: true,
+          onlyAlertOnce: true,
+        ),
+      ),
     );
   }
 
@@ -239,13 +219,17 @@ class BackgroundMetadataWorker {
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     await plugin.initialize(const InitializationSettings(android: androidInit));
 
-    final parts = <String>[' updated'];
-    if (result.noMatch > 0) parts.add(' no match');
-    if (result.errors > 0) parts.add(' errors');
+    final parts = <String>['${result.updated} updated'];
+    if (result.noMatch > 0) parts.add('${result.noMatch} no match');
+    if (result.errors > 0) parts.add('${result.errors} errors');
 
-    final title = result.errors > 0
+    String title = result.errors > 0
         ? 'Metadata fetch finished with errors'
         : 'Metadata fetch complete';
+        
+    if (result.abortedByTimeout) {
+      title = 'Metadata fetch paused (time limit reached)';
+    }
 
     await plugin.show(
       1001,
@@ -258,6 +242,7 @@ class BackgroundMetadataWorker {
           channelDescription: 'Background metadata fetch status',
           importance: Importance.defaultImportance,
           priority: Priority.defaultPriority,
+          showProgress: false,
         ),
       ),
     );

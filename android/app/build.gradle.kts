@@ -21,7 +21,10 @@ android {
     // higher number again, the Gradle error will say "requires ... compile
     // against version N or later" - match compileSdk/targetSdk to N.
     compileSdk = 36
-    ndkVersion = flutter.ndkVersion
+    // Pinned explicitly to the installed NDK version rather than flutter.ndkVersion,
+    // which resolves to a version string that may not match what's installed and
+    // causes Gradle to throw the NDK version string as an exception message.
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true

@@ -58,7 +58,13 @@ class PlaybackController extends BaseAudioHandler with QueueHandler, SeekHandler
   /// this is what actually triggers the OS media notification to appear
   /// (audio_service shows it once play() is called on an active session
   /// with a non-null mediaItem set).
-  Future<void> playSongs(List<Song> songs, {int startIndex = 0}) async {
+  Future<void> playSongs(List<Song> songs, {int startIndex = 0, bool shuffle = false}) async {
+    if (shuffle) {
+      await setShuffleEnabled(true);
+      if (songs.isNotEmpty) {
+        startIndex = DateTime.now().millisecondsSinceEpoch % songs.length;
+      }
+    }
     await loadQueue(songs, startIndex: startIndex);
     await play();
   }
@@ -91,6 +97,63 @@ class PlaybackController extends BaseAudioHandler with QueueHandler, SeekHandler
     // Mirror in our local list
     final song = _queue.removeAt(oldIndex);
     _queue.insert(newIndex, song);
+    queue.add(_playlist!.sequence.map((s) => s.tag as MediaItem).toList());
+  }
+
+  /// Appends a song to the very end of the current queue.
+  Future<void> addToQueue(Song song) async {
+    if (_playlist == null || _queue.isEmpty) {
+      // If nothing is currently loaded, just play this song directly
+      await playSongs([song]);
+      return;
+    }
+
+    _queue.add(song);
+    final mediaItem = MediaItem(
+      id: song.id,
+      title: song.title ?? song.filename,
+      artist: song.artist,
+      album: song.album,
+      duration: song.duration,
+      artUri: song.artworkPath != null ? Uri.file(song.artworkPath!) : null,
+    );
+
+    // Add to the live just_audio playlist
+    await _playlist!.add(AudioSource.uri(
+      Uri.file(song.path),
+      tag: mediaItem,
+    ));
+    
+    // Update audio_service queue
+    queue.add(_playlist!.sequence.map((s) => s.tag as MediaItem).toList());
+  }
+
+  /// Inserts a song immediately after the currently playing song (Play Next).
+  Future<void> playNext(Song song) async {
+    if (_playlist == null || _queue.isEmpty) {
+      await playSongs([song]);
+      return;
+    }
+
+    final currentIndex = _player.currentIndex ?? 0;
+    final insertIndex = currentIndex + 1;
+
+    _queue.insert(insertIndex, song);
+    final mediaItem = MediaItem(
+      id: song.id,
+      title: song.title ?? song.filename,
+      artist: song.artist,
+      album: song.album,
+      duration: song.duration,
+      artUri: song.artworkPath != null ? Uri.file(song.artworkPath!) : null,
+    );
+
+    await _playlist!.insert(insertIndex, AudioSource.uri(
+      Uri.file(song.path),
+      tag: mediaItem,
+    ));
+
+    queue.add(_playlist!.sequence.map((s) => s.tag as MediaItem).toList());
   }
 
   Future<void> setSpeed(double speed) => _player.setSpeed(speed);

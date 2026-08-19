@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:workmanager/workmanager.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/di/providers.dart';
@@ -21,6 +22,12 @@ class MetadataFetchRunner {
   const MetadataFetchRunner._();
 
   static Future<void> run(BuildContext context, WidgetRef ref) async {
+    // Request notification permission for Android 13+ before scheduling background task
+    final status = await Permission.notification.status;
+    if (!status.isGranted) {
+      await Permission.notification.request();
+    }
+
     // Wi-Fi gate
     final wifiOnly = ref.read(wifiOnlyDownloadsProvider);
     if (wifiOnly && !await SongMatcher.isOnWifi()) {
@@ -74,7 +81,7 @@ class MetadataFetchRunner {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content:
-                Text('Fetching metadata for  songs...')),
+                Text('Fetching metadata for ${unknown.length} songs...')),
       );
     }
 
@@ -103,11 +110,11 @@ class MetadataFetchRunner {
       errors += singleResult.errors;
       firstError ??= singleResult.firstError;
 
-      if ((i + 1) % 20 == 0 && context.mounted) {
+      if ((i + 1) % 3 == 0 && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Progress:  /  processed...'),
-            duration: const Duration(seconds: 2),
+            content: Text('Progress: ${i + 1} / ${unknown.length} processed...'),
+            duration: const Duration(seconds: 1),
           ),
         );
       }
@@ -128,10 +135,10 @@ class MetadataFetchRunner {
     } catch (_) {}
 
     if (context.mounted) {
-      String msg = 'Done:  updated';
-      if (noMatch > 0) msg += ',  no match (cleaned locally)';
-      if (errors > 0) msg += ',  errors';
-      if (firstError != null) msg += '\nFirst error: ';
+      String msg = 'Done: $updated updated';
+      if (noMatch > 0) msg += ', $noMatch no match (cleaned locally)';
+      if (errors > 0) msg += ', $errors errors';
+      if (firstError != null) msg += '\nFirst error: $firstError';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(msg), duration: const Duration(seconds: 8)),
       );
