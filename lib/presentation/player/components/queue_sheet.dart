@@ -1,3 +1,5 @@
+import 'package:audio_service/audio_service.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:flutter/material.dart';
 import '../../../application/playback/playback_controller.dart';
 
@@ -27,7 +29,13 @@ class _QueueSheetState extends State<QueueSheet> {
   }
 
   void _scrollToCurrent() {
-    final idx = widget.controller.rawPlayer.currentIndex ?? 0;
+    final state = widget.controller.rawPlayer.sequenceState;
+    if (state == null) return;
+    
+    // Find the current index within the effective (potentially shuffled) sequence
+    final idx = state.effectiveIndices.indexOf(state.currentIndex);
+    if (idx == -1) return;
+    
     if (!widget.scrollController.hasClients) return;
     final maxScroll = widget.scrollController.position.maxScrollExtent;
     final target = (idx * _itemHeight).clamp(0.0, maxScroll);
@@ -40,11 +48,26 @@ class _QueueSheetState extends State<QueueSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<int?>(
-      stream: widget.controller.currentIndexStream,
+    return StreamBuilder<SequenceState?>(
+      stream: widget.controller.sequenceStateStream,
       builder: (context, snap) {
-        final currentIdx = snap.data ?? 0;
-        final queue = widget.controller.currentQueue;
+        final state = snap.data;
+        if (state == null) return const SizedBox.shrink();
+
+        final sequence = state.effectiveSequence;
+        final currentIdx = state.effectiveIndices.indexOf(state.currentIndex);
+        
+        final allSongs = widget.controller.currentQueue;
+        final shuffleEnabled = widget.controller.rawPlayer.shuffleModeEnabled;
+        
+        // Map the effective (shuffled) sequence back to our Song models
+        final queue = sequence.map((source) {
+          final mediaItem = source.tag as MediaItem;
+          return allSongs.firstWhere(
+            (s) => s.id == mediaItem.id,
+            orElse: () => allSongs.first,
+          );
+        }).toList();
 
         return Column(
           children: [
@@ -79,9 +102,11 @@ class _QueueSheetState extends State<QueueSheet> {
                 scrollController: widget.scrollController,
                 itemExtent: _itemHeight,
                 itemCount: queue.length,
-                onReorder: (oldIndex, newIndex) {
-                  widget.controller.reorderQueue(oldIndex, newIndex);
-                },
+                onReorder: shuffleEnabled
+                    ? (a, b) {} // Disable reordering while shuffled
+                    : (oldIndex, newIndex) {
+                        widget.controller.reorderQueue(oldIndex, newIndex);
+                      },
                 proxyDecorator: (child, index, animation) => Material(
                   color: Colors.grey.shade800.withOpacity(0.95),
                   borderRadius: BorderRadius.circular(8),
@@ -120,12 +145,21 @@ class _QueueSheetState extends State<QueueSheet> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    trailing: ReorderableDragStartListener(
-                      index: index,
-                      child: const Icon(Icons.drag_handle, color: Colors.white38),
-                    ),
+                    trailing: shuffleEnabled
+                        ? const SizedBox(width: 24, height: 24) // Hide handle if shuffled
+                        : ReorderableDragStartListener(
+                            index: index,
+                            child: const Icon(Icons.drag_handle, color: Colors.white38),
+                          ),
                     onTap: () async {
-                      await widget.controller.skipToQueueItem(index);
+                      // We must map the effective index back to the ORIGINAL index to seek!
+                      // The index tapped is the `index` in the effective sequence.
+                      // state.effectiveIndices maps original index -> effective index?
+                      // No, effectiveIndices is a list where each element is an original index,
+                      // and the position in the list is the effective index!
+                      // E.g. effectiveIndices[3] = 10 means the 3rd item played is actually the 10th item in the original playlist.
+                      final originalIndex = state.effectiveIndices[index];
+                      await widget.controller.skipToQueueItem(originalIndex);
                       widget.onClose();
                     },
                   );
@@ -138,3 +172,4 @@ class _QueueSheetState extends State<QueueSheet> {
     );
   }
 }
+

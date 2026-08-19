@@ -32,6 +32,8 @@ class PlaybackController extends BaseAudioHandler with QueueHandler, SeekHandler
   AudioPlayer get rawPlayer => _player;
   List<Song> get currentQueue => List.unmodifiable(_queue);
   Stream<int?> get currentIndexStream => _player.currentIndexStream;
+  Stream<SequenceState?> get sequenceStateStream => _player.sequenceStateStream;
+  Stream<bool> get shuffleModeEnabledStream => _player.shuffleModeEnabledStream;
 
   Future<void> loadQueue(List<Song> songs, {int startIndex = 0}) async {
     _queue = List<Song>.from(songs);
