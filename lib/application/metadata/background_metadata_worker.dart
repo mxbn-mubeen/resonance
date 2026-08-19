@@ -104,12 +104,16 @@ void callbackDispatcher() {
 
       await BackgroundMetadataWorker.postNotification(result);
       
-      // If we aborted due to time limit, tell WorkManager to reschedule a new task
-      // by returning false (meaning it failed/needs retry), but we use ExistingWorkPolicy.keep
-      // so we might want to just let it finish and rely on the user or a periodic task.
-      // Wait, returning false causes exponential backoff retry. This is actually good!
       if (result.abortedByTimeout) {
-        return false;
+        // Explicitly queue a new task to continue the batch instead of failing.
+        // This avoids Android's exponential backoff making us wait hours between batches.
+        await Workmanager().registerOneOffTask(
+          '${kMetadataFetchTaskName}_continuation_${DateTime.now().millisecondsSinceEpoch}',
+          kMetadataFetchTaskName,
+          existingWorkPolicy: ExistingWorkPolicy.replace,
+          constraints: Constraints(networkType: NetworkType.connected),
+        );
+        return true;
       }
     } finally {
       await isar.close();
