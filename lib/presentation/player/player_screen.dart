@@ -116,8 +116,15 @@ class _PlayerContentState extends ConsumerState<_PlayerContent> {
       stream: widget.controller.playbackState,
       builder: (context, stateSnapshot) {
         final playing = stateSnapshot.data?.playing ?? false;
-        final position = stateSnapshot.data?.updatePosition ?? Duration.zero;
         final total = widget.item?.duration ?? Duration.zero;
+
+        return StreamBuilder<Duration>(
+          stream: widget.controller.positionStream,
+          builder: (context, positionSnapshot) {
+            final position = positionSnapshot.data ?? stateSnapshot.data?.updatePosition ?? Duration.zero;
+
+        final allSongs = ref.watch(librarySongsProvider).valueOrNull ?? [];
+        final song = allSongs.firstWhereOrNull((s) => s.id == widget.item?.id);
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(32, 8, 32, 24),
@@ -179,24 +186,17 @@ class _PlayerContentState extends ConsumerState<_PlayerContent> {
                   ),
                   SizedBox(
                     width: 48,
-                    child: Builder(
-                      builder: (context) {
-                        final allSongs = ref.watch(librarySongsProvider).valueOrNull ?? [];
-                        final song = allSongs.firstWhereOrNull((s) => s.id == widget.item?.id);
-                        if (song == null) return const SizedBox.shrink();
-
-                        final isFavorite = song.favorite;
-                        return IconButton(
-                          icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border,
-                              color: isFavorite ? Colors.pinkAccent : Colors.white70),
-                          onPressed: () async {
-                            final repo = await ref.read(libraryRepositoryProvider.future);
-                            await repo.toggleFavorite(song.id, !isFavorite);
-                            ref.invalidate(librarySongsProvider);
-                          },
-                        );
-                      },
-                    ),
+                    child: song == null
+                        ? const SizedBox.shrink()
+                        : IconButton(
+                            icon: Icon(song.favorite ? Icons.favorite : Icons.favorite_border,
+                                color: song.favorite ? Colors.pinkAccent : Colors.white70),
+                            onPressed: () async {
+                              final repo = await ref.read(libraryRepositoryProvider.future);
+                              await repo.toggleFavorite(song.id, !song.favorite);
+                              ref.invalidate(librarySongsProvider);
+                            },
+                          ),
                   ),
                 ],
               ),
@@ -238,10 +238,12 @@ class _PlayerContentState extends ConsumerState<_PlayerContent> {
               ),
               const SizedBox(height: 8),
               // ── Secondary controls ──────────────────────────────────────
-              PlayerSecondaryControls(controller: widget.controller),
+              PlayerSecondaryControls(controller: widget.controller, song: song, artworkPath: widget.artworkPath),
             ],
           ),
         );
+      },
+    );
       },
     );
   }

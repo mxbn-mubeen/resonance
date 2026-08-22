@@ -22,6 +22,8 @@ class Song extends Equatable {
   final int? bitrate;
   final String? codec;
   final int? sizeBytes;
+  final String? plainLyrics;
+  final String? syncedLyrics;
 
   const Song({
     required this.id,
@@ -42,6 +44,8 @@ class Song extends Equatable {
     this.bitrate,
     this.codec,
     this.sizeBytes,
+    this.plainLyrics,
+    this.syncedLyrics,
   });
 
   Song copyWith({
@@ -54,6 +58,8 @@ class Song extends Equatable {
     int? playCount,
     double? rating,
     bool? hidden,
+    String? plainLyrics,
+    String? syncedLyrics,
   }) {
     return Song(
       id: id,
@@ -74,6 +80,8 @@ class Song extends Equatable {
       bitrate: bitrate,
       codec: codec,
       sizeBytes: sizeBytes,
+      plainLyrics: plainLyrics ?? this.plainLyrics,
+      syncedLyrics: syncedLyrics ?? this.syncedLyrics,
     );
   }
 

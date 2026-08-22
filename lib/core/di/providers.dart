@@ -16,6 +16,7 @@ import '../../application/scanner/scanner_service.dart';
 import '../../data/local/database_service.dart';
 import '../../data/local/isar_schemas.dart';
 import '../../data/remote/itunes_api.dart';
+import '../../data/remote/lrclib_api.dart';
 import '../../data/remote/musicbrainz_api.dart';
 import '../../data/repositories/history_repository.dart';
 import '../../data/repositories/library_health_history_repository.dart';
@@ -110,7 +111,15 @@ final artworkManagerProvider = Provider<ArtworkManager>((ref) => ArtworkManager(
 
 final artworkPaletteServiceProvider = Provider<ArtworkPaletteService>((ref) => ArtworkPaletteService());
 
-final lyricsManagerProvider = Provider<LyricsManager>((ref) => LyricsManager());
+final lrcLibApiProvider = Provider<LrcLibApi>((ref) => LrcLibApi());
+
+final lyricsManagerProvider = FutureProvider<LyricsManager>((ref) async {
+  final libraryRepo = await ref.watch(libraryRepositoryProvider.future);
+  return LyricsManager(
+    lrcLibApi: ref.watch(lrcLibApiProvider),
+    libraryRepository: libraryRepo,
+  );
+});
 
 final duplicateDetectorProvider = Provider<DuplicateDetector>((ref) => DuplicateDetector());
 

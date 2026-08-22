@@ -1,12 +1,21 @@
 import 'package:flutter/material.dart';
 import '../../../application/playback/playback_controller.dart';
+import '../../../domain/entities/song.dart';
 import '../../equalizer/equalizer_screen.dart';
+import '../lyrics_screen.dart';
 import 'queue_sheet.dart';
 
 class PlayerSecondaryControls extends StatefulWidget {
   final PlaybackController controller;
+  final Song? song;
+  final String? artworkPath;
 
-  const PlayerSecondaryControls({super.key, required this.controller});
+  const PlayerSecondaryControls({
+    super.key,
+    required this.controller,
+    this.song,
+    this.artworkPath,
+  });
 
   @override
   State<PlayerSecondaryControls> createState() => _PlayerSecondaryControlsState();
@@ -107,6 +116,22 @@ class _PlayerSecondaryControlsState extends State<PlayerSecondaryControls> {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
+          TextButton.icon(
+            onPressed: widget.song == null
+                ? null
+                : () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => LyricsScreen(
+                          song: widget.song!,
+                          controller: widget.controller,
+                          artworkPath: widget.artworkPath,
+                        ),
+                      ),
+                    ),
+            icon: Icon(Icons.lyrics_outlined,
+                color: widget.song == null ? Colors.white30 : Colors.white70, size: 18),
+            label: Text('Lyrics', style: TextStyle(color: widget.song == null ? Colors.white30 : Colors.white70)),
+          ),
           TextButton.icon(
             onPressed: _showSpeedPicker,
             icon: const Icon(Icons.speed, color: Colors.white70, size: 18),

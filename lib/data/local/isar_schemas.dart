@@ -28,6 +28,12 @@ class SongRecord {
   int? bitrate;
   String? codec;
   int? sizeBytes;
+
+  // Lyrics cache - independent of MetadataRecord matching, since LRCLIB
+  // lookup only needs title/artist/album/duration (which every song has,
+  // matched or not) and not every song gets a MetadataRecord.
+  String? plainLyrics;
+  String? syncedLyrics; // raw LRC-format text, parsed for display by LrcParser
 }
 
 /// Mirrors the "Metadata Table".

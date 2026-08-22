@@ -41,11 +41,13 @@ class MiniPlayer extends ConsumerWidget {
                     MaterialPageRoute(builder: (_) => const PlayerScreen()),
                   );
                 },
-                child: SizedBox(
-                  height: 56,
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 12),
+                child: SafeArea(
+                  top: false,
+                  child: SizedBox(
+                    height: 56,
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 12),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(6),
                         child: item?.artUri != null
@@ -81,6 +83,7 @@ class MiniPlayer extends ConsumerWidget {
                       const SizedBox(width: 4),
                     ],
                   ),
+                ),
                 ),
               ),
             );

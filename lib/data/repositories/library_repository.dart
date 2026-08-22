@@ -30,6 +30,8 @@ class LibraryRepository {
         bitrate: r.bitrate,
         codec: r.codec,
         sizeBytes: r.sizeBytes,
+        plainLyrics: r.plainLyrics,
+        syncedLyrics: r.syncedLyrics,
       );
 
   Future<List<Song>> getAllSongs({bool includeHidden = false}) async {
@@ -116,6 +118,19 @@ class LibraryRepository {
         rec.playCount += 1;
         await isar.songRecords.put(rec);
       }
+    });
+  }
+
+  /// Persists lyrics found via LyricsManager (embedded tag, sidecar .lrc
+  /// file, or LRCLIB online fetch) so they're only ever looked up once per
+  /// song, not re-fetched every time the lyrics view opens.
+  Future<void> updateLyrics(String songId, {String? plain, String? synced}) async {
+    await isar.writeTxn(() async {
+      final rec = await isar.songRecords.get(int.parse(songId));
+      if (rec == null) return;
+      if (plain != null) rec.plainLyrics = plain;
+      if (synced != null) rec.syncedLyrics = synced;
+      await isar.songRecords.put(rec);
     });
   }
 
