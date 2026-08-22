@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 import 'package:audio_service/audio_service.dart';
@@ -185,6 +186,8 @@ class _SyncedLyricsView extends StatefulWidget {
 class _SyncedLyricsViewState extends State<_SyncedLyricsView> {
   late final List<LrcLine> _lines;
   late final List<GlobalKey> _lineKeys;
+  late final ScrollController _scrollController;
+  StreamSubscription<Duration>? _positionSub;
   int _activeIndex = -1;
 
   @override
@@ -192,15 +195,27 @@ class _SyncedLyricsViewState extends State<_SyncedLyricsView> {
     super.initState();
     _lines = LrcParser.parse(widget.rawLrc);
     _lineKeys = List.generate(_lines.length, (_) => GlobalKey());
+    _scrollController = ScrollController();
+
+    // Subscribe once — don't rebuild the whole ListView on every tick.
+    _positionSub = widget.controller.positionStream.listen(_handlePosition);
+  }
+
+  @override
+  void dispose() {
+    _positionSub?.cancel();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _handlePosition(Duration position) {
+    if (!mounted) return;
     final newIndex = LrcParser.activeLineIndex(_lines, position);
     if (newIndex != _activeIndex && newIndex >= 0) {
       setState(() => _activeIndex = newIndex);
-      // Wait a frame so the highlighted line's new style/size is laid out
-      // before measuring where to scroll to.
+      // Wait a frame so the highlighted line's new size is laid out first.
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         final ctx = _lineKeys[newIndex].currentContext;
         if (ctx != null) {
           Scrollable.ensureVisible(
@@ -220,39 +235,42 @@ class _SyncedLyricsViewState extends State<_SyncedLyricsView> {
       return const Center(child: Text('Failed to parse lyrics', style: TextStyle(color: Colors.white70)));
     }
 
-    return StreamBuilder<Duration>(
-      stream: widget.controller.positionStream,
-      builder: (context, snapshot) {
-        final position = snapshot.data ?? Duration.zero;
-        // Scheduled after build, not during - this callback can trigger a
-        // setState, which isn't allowed mid-build.
-        WidgetsBinding.instance.addPostFrameCallback((_) => _handlePosition(position));
-
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: 120, horizontal: 32),
-          itemCount: _lines.length,
-          itemBuilder: (context, index) {
-            final isActive = index == _activeIndex;
-            return Padding(
-              key: _lineKeys[index],
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 300),
-                style: TextStyle(
-                  color: isActive ? Colors.white : Colors.white.withOpacity(0.4),
-                  fontSize: isActive ? 22 : 18,
-                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                  height: 1.4,
-                ),
-                child: Text(
-                  _lines[index].text.isEmpty ? '♪' : _lines[index].text,
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            );
-          },
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.symmetric(vertical: 120, horizontal: 32),
+      itemCount: _lines.length,
+      itemBuilder: (context, index) {
+        final isActive = index == _activeIndex;
+        return Padding(
+          key: _lineKeys[index],
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 300),
+            style: TextStyle(
+              color: isActive ? Colors.white : Colors.white.withOpacity(0.4),
+              fontSize: isActive ? 22 : 18,
+              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+              height: 1.4,
+              // Multilingual fallback fonts: covers Tamil, Hindi, Telugu,
+              // Malayalam, Arabic, Russian, Japanese, Chinese etc.
+              fontFamilyFallback: const [
+                'NotoSans',
+                'NotoSansTamil',
+                'NotoSansDevanagari',
+                'NotoSansTelugu',
+                'NotoSansMalayalam',
+                'NotoSansArabic',
+                'NotoSansCJK',
+              ],
+            ),
+            child: Text(
+              _lines[index].text.isEmpty ? '♪' : _lines[index].text,
+              textAlign: TextAlign.center,
+            ),
+          ),
         );
       },
     );
   }
 }
+

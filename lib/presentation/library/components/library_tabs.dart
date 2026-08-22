@@ -63,13 +63,25 @@ class ArtistsTab extends StatelessWidget {
         return ListTile(
           leading: CircleAvatar(
             backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-            child: Text(
-              artist.isNotEmpty ? artist[0].toUpperCase() : '?',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            backgroundImage: artistSongs
+                    .firstWhere((s) => s.artworkPath != null,
+                        orElse: () => artistSongs.first)
+                    .artworkPath !=
+                null
+                ? FileImage(File(artistSongs
+                    .firstWhere((s) => s.artworkPath != null,
+                        orElse: () => artistSongs.first)
+                    .artworkPath!))
+                : null,
+            child: artistSongs.every((s) => s.artworkPath == null)
+                ? Text(
+                    artist.isNotEmpty ? artist[0].toUpperCase() : '?',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  )
+                : null,
           ),
           title: Text(artist, maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text('${artistSongs.length} songs'),
