@@ -33,7 +33,8 @@ class _QueueSheetState extends State<QueueSheet> {
     if (state == null) return;
     
     // Find the current index within the effective (potentially shuffled) sequence
-    final idx = state.effectiveIndices.indexOf(state.currentIndex);
+    final effectiveIndices = widget.controller.rawPlayer.effectiveIndices;
+    final idx = effectiveIndices != null ? effectiveIndices.indexOf(state.currentIndex) : state.currentIndex;
     if (idx == -1) return;
     
     if (!widget.scrollController.hasClients) return;
@@ -55,7 +56,8 @@ class _QueueSheetState extends State<QueueSheet> {
         if (state == null) return const SizedBox.shrink();
 
         final sequence = state.effectiveSequence;
-        final currentIdx = state.effectiveIndices.indexOf(state.currentIndex);
+        final effectiveIndices = widget.controller.rawPlayer.effectiveIndices;
+        final currentIdx = effectiveIndices != null ? effectiveIndices.indexOf(state.currentIndex) : state.currentIndex;
         
         final allSongs = widget.controller.currentQueue;
         final shuffleEnabled = widget.controller.rawPlayer.shuffleModeEnabled;
@@ -158,7 +160,8 @@ class _QueueSheetState extends State<QueueSheet> {
                       // No, effectiveIndices is a list where each element is an original index,
                       // and the position in the list is the effective index!
                       // E.g. effectiveIndices[3] = 10 means the 3rd item played is actually the 10th item in the original playlist.
-                      final originalIndex = state.effectiveIndices[index];
+                      final effectiveIndices = widget.controller.rawPlayer.effectiveIndices;
+                      final originalIndex = effectiveIndices != null ? effectiveIndices[index] : index;
                       await widget.controller.skipToQueueItem(originalIndex);
                       widget.onClose();
                     },
