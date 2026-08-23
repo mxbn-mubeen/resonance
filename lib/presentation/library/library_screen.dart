@@ -18,6 +18,15 @@ class LibraryScreen extends ConsumerStatefulWidget {
 
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   _SortMode _sortMode = _SortMode.titleAsc;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+  bool _showSearch = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   List<Song> _sortSongs(List<Song> songs) {
     final list = List<Song>.from(songs);
@@ -69,7 +78,18 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       length: 5,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Library'),
+          title: _showSearch
+              ? TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  style: const TextStyle(fontSize: 16),
+                  decoration: const InputDecoration(
+                    hintText: 'Search library...',
+                    border: InputBorder.none,
+                  ),
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                )
+              : const Text('Library'),
           bottom: const TabBar(
             isScrollable: true,
             tabAlignment: TabAlignment.start,
@@ -92,6 +112,19 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           ),
           actions: [
             IconButton(
+              icon: Icon(_showSearch ? Icons.close : Icons.search),
+              tooltip: _showSearch ? 'Close search' : 'Search library',
+              onPressed: () {
+                setState(() {
+                  _showSearch = !_showSearch;
+                  if (!_showSearch) {
+                    _searchQuery = '';
+                    _searchController.clear();
+                  }
+                });
+              },
+            ),
+            IconButton(
               icon: const Icon(Icons.refresh),
               tooltip: 'Rescan',
               onPressed: () async {
@@ -113,7 +146,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           ],
         ),
         body: songsAsync.when(
-          data: (songs) {
+          data: (allSongs) {
+            final query = _searchQuery.toLowerCase();
+            final songs = query.isEmpty 
+                ? allSongs 
+                : allSongs.where((s) {
+                    return (s.title ?? s.filename).toLowerCase().contains(query) ||
+                           (s.artist ?? '').toLowerCase().contains(query) ||
+                           (s.album ?? '').toLowerCase().contains(query) ||
+                           (s.path).toLowerCase().contains(query);
+                  }).toList();
+
             final sorted = _sortSongs(songs);
 
             // Build grouped data

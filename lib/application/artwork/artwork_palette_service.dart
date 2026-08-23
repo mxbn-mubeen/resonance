@@ -33,4 +33,30 @@ class ArtworkPaletteService {
   }
 
   void clearCache() => _cache.clear();
+
+  final Map<String, Color> _accentCache = {};
+
+  /// Returns the vibrant/accent color from the artwork palette — the bright,
+  /// saturated swatch best suited for highlights like the active lyrics line.
+  /// Falls back through: lightVibrant → vibrant → lightMuted → white.
+  Future<Color?> accentColorFor(String? artworkPath) async {
+    if (artworkPath == null) return null;
+    if (_accentCache.containsKey(artworkPath)) return _accentCache[artworkPath];
+
+    try {
+      final palette = await PaletteGenerator.fromImageProvider(
+        FileImage(File(artworkPath)),
+        maximumColorCount: 16,
+      );
+      final swatch = palette.lightVibrantColor ??
+          palette.vibrantColor ??
+          palette.lightMutedColor ??
+          palette.dominantColor;
+      final color = swatch?.color;
+      if (color != null) _accentCache[artworkPath] = color;
+      return color;
+    } catch (_) {
+      return null;
+    }
+  }
 }

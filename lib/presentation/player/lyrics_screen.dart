@@ -1,15 +1,15 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
-import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../application/lyrics/lrc_parser.dart';
 import '../../application/playback/playback_controller.dart';
 import '../../core/di/providers.dart';
 import '../../data/remote/lrclib_api.dart';
 import '../../domain/entities/song.dart';
+import 'components/plain_lyrics_view.dart';
+import 'components/synced_lyrics_view.dart';
 
 /// Full-screen lyrics view, Apple Music style - slides up over the player.
 /// Deliberately inherits the exact same blurred-backdrop treatment as
@@ -35,6 +35,8 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
   // Cache the future so rebuilds (e.g. from palette resolution) don't
   // create a new Future each time and reset FutureBuilder back to waiting.
   late final Future<LyricsResult?> _lyricsFuture;
+  // Warm golden fallback — replaced once the palette resolves.
+  Color _accentColor = const Color(0xFFFFD580);
 
   @override
   void initState() {
@@ -42,6 +44,17 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     _lyricsFuture = ref
         .read(lyricsManagerProvider.future)
         .then((m) => m.getLyricsForSong(widget.song));
+    // Resolve accent once — don't use a FutureBuilder so _SyncedLyricsView
+    // isn't destroyed/recreated each time the palette resolves.
+    _resolveAccent();
+  }
+
+  Future<void> _resolveAccent() async {
+    final paletteService = ref.read(artworkPaletteServiceProvider);
+    final color = await paletteService.accentColorFor(widget.artworkPath);
+    if (color != null && mounted) {
+      setState(() => _accentColor = color);
+    }
   }
 
   @override
@@ -82,30 +95,33 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
                         ),
                       ),
                       Expanded(
-                        child: FutureBuilder<LyricsResult?>(
-                          future: _lyricsFuture,
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return const Center(child: CircularProgressIndicator(color: Colors.white70));
-                            }
-                            if (snapshot.hasError) {
-                              return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
-                            }
-                            final result = snapshot.data;
-                            // Debug: show raw state on screen
-                            if (result == null) {
-                              return const Center(child: Text('DEBUG: result=null', style: TextStyle(color: Colors.yellow, fontSize: 16)));
-                            }
-                            if (result.isEmpty) {
-                              return _NoLyricsState(widget.song);
-                            }
-                            if (result.syncedLyrics != null && result.syncedLyrics!.trim().isNotEmpty) {
-                              return _SyncedLyricsView(rawLrc: result.syncedLyrics!, controller: widget.controller);
-                            }
-                            return _PlainLyricsView(text: result.plainLyrics ?? 'DEBUG: plainLyrics is null/empty');
-                          },
-                        ),
+                      child: FutureBuilder<LyricsResult?>(
+                        future: _lyricsFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator(color: Colors.white70));
+                          }
+                          if (snapshot.hasError) {
+                            return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
+                          }
+                          final result = snapshot.data;
+                          if (result == null || result.isEmpty) {
+                            return _NoLyricsState(widget.song);
+                          }
+                          if (result.syncedLyrics != null && result.syncedLyrics!.trim().isNotEmpty) {
+                            return SyncedLyricsView(
+                              rawLrc: result.syncedLyrics!,
+                              controller: widget.controller,
+                              accentColor: _accentColor,
+                            );
+                          }
+                          return PlainLyricsView(
+                            text: result.plainLyrics ?? '',
+                            accentColor: _accentColor,
+                          );
+                        },
                       ),
+                    ),
                     ],
                   ),
                 ),
@@ -117,7 +133,6 @@ class _LyricsScreenState extends ConsumerState<LyricsScreen> {
     );
   }
 }
-
 
 class _NoLyricsState extends StatelessWidget {
   final Song song;
@@ -150,127 +165,4 @@ class _NoLyricsState extends StatelessWidget {
   }
 }
 
-class _PlainLyricsView extends StatelessWidget {
-  final String text;
-  const _PlainLyricsView({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: const TextStyle(color: Colors.white, fontSize: 18, height: 1.6, fontWeight: FontWeight.w500),
-      ),
-    );
-  }
-}
-
-/// Custom scrolling synced-lyrics list, built from scratch rather than a
-/// pre-built package. Auto-scroll uses per-line GlobalKeys +
-/// Scrollable.ensureVisible instead of a fixed-height-per-line estimate,
-/// since real lyric lines vary in wrapped height and a fixed estimate
-/// would drift out of sync over a long song - measuring the actual
-/// rendered line position stays accurate regardless of wrapping.
-class _SyncedLyricsView extends StatefulWidget {
-  final String rawLrc;
-  final PlaybackController controller;
-
-  const _SyncedLyricsView({required this.rawLrc, required this.controller});
-
-  @override
-  State<_SyncedLyricsView> createState() => _SyncedLyricsViewState();
-}
-
-class _SyncedLyricsViewState extends State<_SyncedLyricsView> {
-  late final List<LrcLine> _lines;
-  late final List<GlobalKey> _lineKeys;
-  late final ScrollController _scrollController;
-  StreamSubscription<Duration>? _positionSub;
-  int _activeIndex = -1;
-
-  @override
-  void initState() {
-    super.initState();
-    _lines = LrcParser.parse(widget.rawLrc);
-    _lineKeys = List.generate(_lines.length, (_) => GlobalKey());
-    _scrollController = ScrollController();
-
-    // Subscribe once — don't rebuild the whole ListView on every tick.
-    _positionSub = widget.controller.positionStream.listen(_handlePosition);
-  }
-
-  @override
-  void dispose() {
-    _positionSub?.cancel();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _handlePosition(Duration position) {
-    if (!mounted) return;
-    final newIndex = LrcParser.activeLineIndex(_lines, position);
-    if (newIndex != _activeIndex && newIndex >= 0) {
-      setState(() => _activeIndex = newIndex);
-      // Wait a frame so the highlighted line's new size is laid out first.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final ctx = _lineKeys[newIndex].currentContext;
-        if (ctx != null) {
-          Scrollable.ensureVisible(
-            ctx,
-            alignment: 0.5,
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeOutCubic,
-          );
-        }
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_lines.isEmpty) {
-      return const Center(child: Text('Failed to parse lyrics', style: TextStyle(color: Colors.white70)));
-    }
-
-    return ListView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.symmetric(vertical: 120, horizontal: 32),
-      itemCount: _lines.length,
-      itemBuilder: (context, index) {
-        final isActive = index == _activeIndex;
-        return Padding(
-          key: _lineKeys[index],
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 300),
-            style: TextStyle(
-              color: isActive ? Colors.white : Colors.white.withOpacity(0.4),
-              fontSize: isActive ? 22 : 18,
-              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-              height: 1.4,
-              // Multilingual fallback fonts: covers Tamil, Hindi, Telugu,
-              // Malayalam, Arabic, Russian, Japanese, Chinese etc.
-              fontFamilyFallback: const [
-                'NotoSans',
-                'NotoSansTamil',
-                'NotoSansDevanagari',
-                'NotoSansTelugu',
-                'NotoSansMalayalam',
-                'NotoSansArabic',
-                'NotoSansCJK',
-              ],
-            ),
-            child: Text(
-              _lines[index].text.isEmpty ? '♪' : _lines[index].text,
-              textAlign: TextAlign.center,
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
 
