@@ -1,19 +1,23 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../../../domain/entities/song.dart';
 import '../../group_detail_screen.dart';
 
-class ArtistsTab extends StatefulWidget {
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/di/providers.dart';
+
+class ArtistsTab extends ConsumerStatefulWidget {
   final List<String> artistKeys;
   final Map<String, List<Song>> artists;
 
   const ArtistsTab({super.key, required this.artistKeys, required this.artists});
 
   @override
-  State<ArtistsTab> createState() => _ArtistsTabState();
+  ConsumerState<ArtistsTab> createState() => _ArtistsTabState();
 }
 
-class _ArtistsTabState extends State<ArtistsTab> {
+class _ArtistsTabState extends ConsumerState<ArtistsTab> {
   String _filter = '';
 
   @override
@@ -49,31 +53,7 @@ class _ArtistsTabState extends State<ArtistsTab> {
             itemBuilder: (context, index) {
               final artist = filteredKeys[index];
               final artistSongs = widget.artists[artist]!;
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                  child: Text(
-                    artist.isNotEmpty ? artist[0].toUpperCase() : '?',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                title: Text(artist, maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: Text('${artistSongs.length} songs'),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => GroupDetailScreen(
-                        title: artist.isNotEmpty ? artist : 'Unknown Artist',
-                        subtitle: '${artistSongs.length} songs',
-                        songs: artistSongs,
-                      ),
-                    ),
-                  );
-                },
-              );
+              return _ArtistTile(artist: artist, artistSongs: artistSongs);
             },
           ),
         ),
@@ -81,3 +61,56 @@ class _ArtistsTabState extends State<ArtistsTab> {
     );
   }
 }
+
+class _ArtistTile extends ConsumerWidget {
+  final String artist;
+  final List<Song> artistSongs;
+
+  const _ArtistTile({required this.artist, required this.artistSongs});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final artistImageAsync = ref.watch(artistImageProvider(artist));
+
+    final fallbackSongWithArt = artistSongs.firstWhere(
+      (s) => s.artworkPath != null,
+      orElse: () => artistSongs.first,
+    );
+    final fallbackArtPath = fallbackSongWithArt.artworkPath;
+
+    // Use Deezer image if available, else fallback to song cover
+    final imagePath = artistImageAsync.value ?? fallbackArtPath;
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+        backgroundImage: imagePath != null ? FileImage(File(imagePath)) : null,
+        child: imagePath == null
+            ? (artistImageAsync.isLoading
+                ? const CircularProgressIndicator()
+                : Text(
+                    artist.isNotEmpty ? artist[0].toUpperCase() : '?',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ))
+            : null,
+      ),
+      title: Text(artist, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text('${artistSongs.length} songs'),
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => GroupDetailScreen(
+              title: artist.isNotEmpty ? artist : 'Unknown Artist',
+              subtitle: '${artistSongs.length} songs',
+              songs: artistSongs,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+

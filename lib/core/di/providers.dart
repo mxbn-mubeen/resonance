@@ -18,6 +18,8 @@ import '../../data/local/isar_schemas.dart';
 import '../../data/remote/itunes_api.dart';
 import '../../data/remote/lrclib_api.dart';
 import '../../data/remote/musicbrainz_api.dart';
+import '../../data/remote/deezer_api.dart';
+import '../../application/artwork/artist_image_service.dart';
 import '../../data/repositories/history_repository.dart';
 import '../../data/repositories/library_health_history_repository.dart';
 import '../../data/repositories/library_repository.dart';
@@ -92,6 +94,17 @@ final playlistsStreamProvider = StreamProvider<List<PlaylistEntity>>((ref) async
 
 final itunesApiProvider = Provider<ItunesApi>((ref) => ItunesApi());
 final musicBrainzApiProvider = Provider<MusicBrainzApi>((ref) => MusicBrainzApi());
+final deezerApiProvider = Provider<DeezerApi>((ref) => DeezerApi());
+
+final artistImageServiceProvider = Provider<ArtistImageService>((ref) {
+  final deezerApi = ref.watch(deezerApiProvider);
+  return ArtistImageService(deezerApi);
+});
+
+final artistImageProvider = FutureProvider.family<String?, String>((ref, artistName) async {
+  final service = ref.watch(artistImageServiceProvider);
+  return service.getArtistImage(artistName);
+});
 
 // ---------- Application layer (engines) ----------
 
