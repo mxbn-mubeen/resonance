@@ -3,11 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../../core/constants/app_constants.dart';
 import '../../core/di/providers.dart';
 import '../../data/local/isar_schemas.dart';
 import 'background_metadata_worker.dart';
 import 'song_matcher.dart';
+import 'song_metadata_processor.dart';
 
 /// Drives the "Fetch missing metadata now" operation.
 ///
@@ -44,17 +44,7 @@ class MetadataFetchRunner {
     }
 
     final songs = ref.read(librarySongsProvider).valueOrNull ?? [];
-    final unknown = songs.where((s) {
-      final a = s.artist?.trim().toLowerCase() ?? '';
-      final t = s.title?.trim().toLowerCase() ?? '';
-      final hasGarbage =
-          kWebsiteBlacklist.any((site) => a.contains(site) || t.contains(site));
-      return a.isEmpty ||
-          a == 'unknown artist' ||
-          a == '<unknown>' ||
-          s.artworkPath == null ||
-          hasGarbage;
-    }).toList();
+    final unknown = songs.where(SongMetadataProcessor.needsMetadataFetch).toList();
 
     if (unknown.isEmpty) {
       if (context.mounted) {

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/song.dart';
 import '../../core/di/providers.dart';
-import '../player/player_screen.dart';
+import '../player/player_route.dart';
 import '../widgets/mini_player.dart';
 import '../widgets/song_tile.dart';
 import 'components/group_header.dart';
@@ -133,9 +133,21 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
                   return SongTile(
                     song: song,
                     onTap: () async {
-                      await ref.read(playbackControllerProvider).playSongs(widget.songs, startIndex: widget.songs.indexOf(song));
+                      // IMPORTANT: pass `filtered` (the sorted/filtered list the user sees)
+                      // NOT `widget.songs` (raw order). Using the raw list as the queue
+                      // while indexing into the filtered list produces a mismatched queue.
+                      await ref.read(playbackControllerProvider).playSongs(filtered, startIndex: index);
                       if (context.mounted) {
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
+                        // Check if a PlayerRoute is already the top-most route
+                        bool isPlayerOpen = false;
+                        Navigator.popUntil(context, (route) {
+                          if (route is PlayerRoute) isPlayerOpen = true;
+                          return true; // Don't actually pop anything
+                        });
+                        
+                        if (!isPlayerOpen) {
+                          Navigator.of(context).push(PlayerRoute());
+                        }
                       }
                     },
                     onFavoriteToggle: () async {

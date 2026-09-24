@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/di/providers.dart';
 import '../../../domain/entities/library_entities.dart';
 import '../../../domain/entities/song.dart';
-import '../../player/player_screen.dart';
+import '../../player/player_route.dart';
 import '../../widgets/playlist_cover_widget.dart';
 
 class PlaylistHeader extends ConsumerWidget {
@@ -59,7 +59,7 @@ class PlaylistHeader extends ConsumerWidget {
                 onPressed: () async {
                   await ref.read(playbackControllerProvider).playSongs(songs);
                   if (context.mounted) {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
+                    Navigator.of(context).push(PlayerRoute());
                   }
                 },
               ),
@@ -72,7 +72,7 @@ class PlaylistHeader extends ConsumerWidget {
                     await ref.read(playbackControllerProvider).playSongs(songs, shuffle: true);
                   }
                   if (context.mounted) {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
+                    Navigator.of(context).push(PlayerRoute());
                   }
                 },
               ),

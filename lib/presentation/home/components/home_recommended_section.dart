@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/di/providers.dart';
 import '../../../domain/entities/song.dart';
-import '../../player/player_screen.dart';
+import '../../player/player_route.dart';
 
 /// Mirrors HomeRecentSection's layout - same card size, same tap-to-play
 /// behavior - so the two rails feel like one design language, not two.
@@ -41,7 +41,7 @@ class HomeRecommendedSection extends ConsumerWidget {
                     onTap: () async {
                       await ref.read(playbackControllerProvider).playSongs(recommended, startIndex: index);
                       if (context.mounted) {
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
+                        Navigator.of(context).push(PlayerRoute());
                       }
                     },
                     child: SizedBox(

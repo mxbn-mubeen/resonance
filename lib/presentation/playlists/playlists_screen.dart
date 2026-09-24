@@ -13,37 +13,53 @@ class PlaylistsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Playlists'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => _showCreateDialog(context, ref),
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Playlists'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'Manual'),
+              Tab(text: 'Auto'),
+              Tab(text: 'AI'),
+            ],
           ),
-        ],
-      ),
-      body: ListView(
-        children: [
-          const _SectionHeader('Manual'),
-          ref.watch(playlistsStreamProvider).when(
-                data: (playlists) {
-                  final manual = playlists.where((p) => !p.isAuto && !p.isAiGenerated).toList();
-                  if (manual.isEmpty) {
-                    return const ListTile(title: Text('No playlists yet'));
-                  }
-                  return Column(
-                    children: manual.map((p) => _PlaylistTile(playlist: p)).toList(),
-                  );
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, st) => Center(child: Text('Error: $e')),
-              ),
-          const _SectionHeader('Automatic'),
-          for (final def in kAutomaticPlaylistDefs) _AutoPlaylistTile(def: def),
-          const _SectionHeader('AI Generated'),
-          for (final def in kAiPlaylistDefs) _AutoPlaylistTile(def: def),
-        ],
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: () => _showCreateDialog(context, ref),
+            ),
+          ],
+        ),
+        body: TabBarView(
+          children: [
+            // Manual tab
+            ref.watch(playlistsStreamProvider).when(
+                  data: (playlists) {
+                    final manual = playlists.where((p) => !p.isAuto && !p.isAiGenerated).toList();
+                    if (manual.isEmpty) {
+                      return const Center(child: Text('No manual playlists yet.'));
+                    }
+                    return ListView(
+                      children: manual.map((p) => _PlaylistTile(playlist: p)).toList(),
+                    );
+                  },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (e, st) => Center(child: Text('Error: $e')),
+                ),
+            
+            // Automatic tab
+            ListView(
+              children: kAutomaticPlaylistDefs.map((def) => _AutoPlaylistTile(def: def)).toList(),
+            ),
+            
+            // AI tab
+            ListView(
+              children: kAiPlaylistDefs.map((def) => _AutoPlaylistTile(def: def)).toList(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -129,18 +145,6 @@ Future<void> openSmartPlaylist(BuildContext context, WidgetRef ref, SmartPlaylis
   );
 }
 
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  const _SectionHeader(this.title);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-      child: Text(title, style: Theme.of(context).textTheme.labelLarge),
-    );
-  }
-}
 
 class _PlaylistTile extends ConsumerWidget {
   final PlaylistEntity playlist;

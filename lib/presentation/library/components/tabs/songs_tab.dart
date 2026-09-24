@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/di/providers.dart';
 import '../../../../domain/entities/song.dart';
-import '../../../player/player_screen.dart';
+import '../../../player/player_route.dart';
 import '../../../widgets/song_tile.dart';
 
 class SongsTab extends ConsumerWidget {
@@ -29,7 +29,7 @@ class SongsTab extends ConsumerWidget {
                   final repo = await ref.read(libraryRepositoryProvider.future);
                   await repo.incrementPlayCount(song.id);
                   if (context.mounted) {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
+                    Navigator.of(context).push(PlayerRoute());
                   }
                 },
                 onFavoriteToggle: () async {

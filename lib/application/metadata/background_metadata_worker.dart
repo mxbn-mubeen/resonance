@@ -1,23 +1,18 @@
-import 'dart:io';
-
-import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:workmanager/workmanager.dart';
 
+import 'background_notification_service.dart';
 import 'metadata_fetch_result.dart';
 import 'song_metadata_processor.dart';
 
-import '../../core/constants/app_constants.dart';
 import '../../data/local/isar_schemas.dart';
 import '../../data/remote/itunes_api.dart';
 import '../../data/remote/musicbrainz_api.dart';
 import '../../data/repositories/library_repository.dart';
 import '../../data/repositories/metadata_fetch_history_repository.dart';
 import '../artwork/artwork_manager.dart';
-import '../metadata/metadata_cleaner.dart';
 import '../metadata/song_matcher.dart';
 
 /// Task name constant shared between the dispatcher and the runner.
@@ -63,17 +58,7 @@ void callbackDispatcher() {
       final artworkMgr = ArtworkManager();
 
       final songs = await libraryRepo.getAllSongs();
-      final unknown = songs.where((s) {
-        final a = s.artist?.trim().toLowerCase() ?? '';
-        final t = s.title?.trim().toLowerCase() ?? '';
-        final hasGarbage =
-            kWebsiteBlacklist.any((site) => a.contains(site) || t.contains(site));
-        return a.isEmpty ||
-            a == 'unknown artist' ||
-            a == '<unknown>' ||
-            s.artworkPath == null ||
-            hasGarbage;
-      }).toList();
+      final unknown = songs.where(SongMetadataProcessor.needsMetadataFetch).toList();
 
       if (unknown.isEmpty) {
         return true;
@@ -89,7 +74,7 @@ void callbackDispatcher() {
         stopwatch: stopwatch,
         timeLimitMinutes: 9,
         onProgress: (processed, total) {
-          BackgroundMetadataWorker.postProgressNotification(processed, total);
+          BackgroundNotificationService.postProgressNotification(processed, total);
         },
       );
 
@@ -102,7 +87,7 @@ void callbackDispatcher() {
         ..firstError = result.firstError;
       await historyRepo.saveRun(record);
 
-      await BackgroundMetadataWorker.postNotification(result);
+      await BackgroundNotificationService.postNotification(result);
       
       if (result.abortedByTimeout) {
         // Explicitly queue a new task to continue the batch instead of failing.
@@ -146,6 +131,8 @@ class BackgroundMetadataWorker {
     int errors = 0;
     String? firstError;
     bool abortedByTimeout = false;
+    SongFetchOutcome? lastOutcome;
+    String? lastApiError;
 
     // Show initial notification before processing starts
     if (onProgress != null) {
@@ -172,9 +159,13 @@ class BackgroundMetadataWorker {
           noMatch++;
         }
         updated++;
+        lastOutcome = songResult.outcome;
+        lastApiError = songResult.apiError;
       } catch (e) {
         errors++;
         firstError ??= e.toString();
+        lastOutcome = SongFetchOutcome.apiError;
+        lastApiError = e.toString();
       }
       
       processed++;
@@ -191,64 +182,8 @@ class BackgroundMetadataWorker {
       errors: errors,
       firstError: firstError,
       abortedByTimeout: abortedByTimeout,
-    );
-  }
-
-  static Future<void> postProgressNotification(int processed, int total) async {
-    final plugin = FlutterLocalNotificationsPlugin();
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    await plugin.initialize(const InitializationSettings(android: androidInit));
-
-    await plugin.show(
-      1001,
-      'Fetching Metadata',
-      'Processed $processed / $total songs...',
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'resonance_metadata',
-          'Resonance Metadata',
-          channelDescription: 'Background metadata fetch status',
-          importance: Importance.low,
-          priority: Priority.low,
-          showProgress: true,
-          onlyAlertOnce: true,
-        ),
-      ),
-    );
-  }
-
-  /// Posts an Android completion notification. Safe from a background isolate.
-  static Future<void> postNotification(MetadataFetchResult result) async {
-    final plugin = FlutterLocalNotificationsPlugin();
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    await plugin.initialize(const InitializationSettings(android: androidInit));
-
-    final parts = <String>['${result.updated} updated'];
-    if (result.noMatch > 0) parts.add('${result.noMatch} no match');
-    if (result.errors > 0) parts.add('${result.errors} errors');
-
-    String title = result.errors > 0
-        ? 'Metadata fetch finished with errors'
-        : 'Metadata fetch complete';
-        
-    if (result.abortedByTimeout) {
-      title = 'Metadata fetch paused (time limit reached)';
-    }
-
-    await plugin.show(
-      1001,
-      title,
-      parts.join(' · '),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'resonance_metadata',
-          'Resonance Metadata',
-          channelDescription: 'Background metadata fetch status',
-          importance: Importance.defaultImportance,
-          priority: Priority.defaultPriority,
-          showProgress: false,
-        ),
-      ),
+      lastOutcome: lastOutcome,
+      lastApiError: lastApiError,
     );
   }
 }

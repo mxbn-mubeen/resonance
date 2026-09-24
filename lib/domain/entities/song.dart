@@ -24,6 +24,8 @@ class Song extends Equatable {
   final int? sizeBytes;
   final String? plainLyrics;
   final String? syncedLyrics;
+  final int fetchAttemptCount;
+  final DateTime? lastFetchAttemptAt;
 
   const Song({
     required this.id,
@@ -46,6 +48,8 @@ class Song extends Equatable {
     this.sizeBytes,
     this.plainLyrics,
     this.syncedLyrics,
+    this.fetchAttemptCount = 0,
+    this.lastFetchAttemptAt,
   });
 
   Song copyWith({

@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:collection/collection.dart';
 
 import '../../core/di/providers.dart';
-import '../player/player_screen.dart';
+import '../player/player_route.dart';
 
 /// Bound to the same PlaybackController streams as PlayerScreen and the OS
 /// notification - all three always agree on what's playing.
@@ -37,9 +37,10 @@ class MiniPlayer extends ConsumerWidget {
               child: InkWell(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                 onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const PlayerScreen()),
-                  );
+                  // Prevent multiple pushes if the user double-taps
+                  if (ModalRoute.of(context) is! PlayerRoute) {
+                    Navigator.of(context).push(PlayerRoute());
+                  }
                 },
                 child: SafeArea(
                   top: false,
@@ -51,7 +52,7 @@ class MiniPlayer extends ConsumerWidget {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(6),
                         child: item?.artUri != null
-                            ? Image.file(File(item!.artUri!.toFilePath()), width: 36, height: 36, fit: BoxFit.cover)
+                            ? Image.file(File(item!.artUri!.toFilePath()), width: 36, height: 36, fit: BoxFit.cover, gaplessPlayback: true)
                             : Container(
                                 width: 36,
                                 height: 36,

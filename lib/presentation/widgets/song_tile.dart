@@ -67,17 +67,20 @@ class _SongTileState extends ConsumerState<SongTile> {
               final item = mediaSnapshot.data;
               final isCurrent = item?.id == widget.song.id;
 
-              if (!isCurrent) return const SizedBox.shrink();
-
               return StreamBuilder<PlaybackState>(
                 stream: controller.playbackState,
                 builder: (context, stateSnapshot) {
                   final playing = stateSnapshot.data?.playing ?? false;
-                  if (!playing) return const SizedBox.shrink();
-
-                  return const Padding(
-                    padding: EdgeInsets.only(right: 8.0),
-                    child: PlayingIndicator(size: 20),
+                  
+                  // Keep a fixed width (28px) so the favorite/menu icons don't jump left/right when pausing
+                  return SizedBox(
+                    width: 28,
+                    child: (isCurrent && playing)
+                        ? const Padding(
+                            padding: EdgeInsets.only(right: 8.0),
+                            child: PlayingIndicator(size: 20),
+                          )
+                        : const SizedBox.shrink(),
                   );
                 },
               );

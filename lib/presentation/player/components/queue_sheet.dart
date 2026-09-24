@@ -25,19 +25,34 @@ class _QueueSheetState extends State<QueueSheet> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrent());
+    // DraggableScrollableSheet attaches the scrollController asynchronously
+    // while its open animation plays. A single postFrameCallback fires before
+    // the controller has clients. Retry until it is ready.
+    _scheduleScrollToCurrent();
+  }
+
+  void _scheduleScrollToCurrent() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.scrollController.hasClients) {
+        _scrollToCurrent();
+      } else {
+        // Controller not attached yet — retry next frame
+        _scheduleScrollToCurrent();
+      }
+    });
   }
 
   void _scrollToCurrent() {
     final state = widget.controller.rawPlayer.sequenceState;
     if (state == null) return;
-    
-    // Find the current index within the effective (potentially shuffled) sequence
+
     final effectiveIndices = widget.controller.rawPlayer.effectiveIndices;
-    final idx = effectiveIndices != null ? effectiveIndices.indexOf(state.currentIndex) : state.currentIndex;
-    if (idx == -1) return;
-    
-    if (!widget.scrollController.hasClients) return;
+    final idx = effectiveIndices != null
+        ? effectiveIndices.indexOf(state.currentIndex)
+        : state.currentIndex;
+    if (idx <= 0) return; // nothing to scroll to if already at top
+
     final maxScroll = widget.scrollController.position.maxScrollExtent;
     final target = (idx * _itemHeight).clamp(0.0, maxScroll);
     widget.scrollController.animateTo(

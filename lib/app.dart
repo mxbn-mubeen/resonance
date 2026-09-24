@@ -35,6 +35,9 @@ class _OfflineMusicAppState extends ConsumerState<OfflineMusicApp> {
     // Activates the play-history logging subscription for the app's
     // lifetime - see historyLoggerProvider's doc comment in providers.dart.
     ref.watch(historyLoggerProvider);
+    
+    // Activates the Infinite Autoplay manager
+    ref.watch(autoPlayManagerProvider);
 
     return MaterialApp(
       title: 'Resonance',

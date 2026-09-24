@@ -2,6 +2,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../../domain/entities/song.dart';
+import 'song_media_item_extension.dart';
 
 /// Wraps a single AudioPlayer + exposes queue/shuffle/repeat/speed/
 /// sleep-timer/gapless/crossfade controls. Registered as a background
@@ -40,15 +41,7 @@ class PlaybackController extends BaseAudioHandler with QueueHandler, SeekHandler
     _queue = List<Song>.from(songs);
     _playlist = ConcatenatingAudioSource(
       children: songs
-          .map((s) => AudioSource.uri(Uri.file(s.path),
-              tag: MediaItem(
-                id: s.id,
-                title: s.title ?? s.filename,
-                artist: s.artist,
-                album: s.album,
-                duration: s.duration,
-                artUri: s.artworkPath != null ? Uri.file(s.artworkPath!) : null,
-              )))
+          .map((s) => AudioSource.uri(Uri.file(s.path), tag: s.toMediaItem()))
           .toList(),
     );
     final mediaItems = _playlist!.sequence.map((s) => s.tag as MediaItem).toList();
@@ -62,11 +55,18 @@ class PlaybackController extends BaseAudioHandler with QueueHandler, SeekHandler
   /// (audio_service shows it once play() is called on an active session
   /// with a non-null mediaItem set).
   Future<void> playSongs(List<Song> songs, {int startIndex = 0, bool shuffle = false}) async {
-    if (shuffle) {
-      await setShuffleEnabled(true);
-      if (songs.isNotEmpty) {
-        startIndex = DateTime.now().millisecondsSinceEpoch % songs.length;
-      }
+    // BUG FIX: this previously only called setShuffleEnabled when
+    // `shuffle` was true, never explicitly disabling it otherwise. Once
+    // shuffle got turned on anywhere (e.g. a "shuffle all" action), it
+    // stayed enabled at the underlying AudioPlayer level indefinitely -
+    // just_audio's shuffle mode is a player-level setting, not tied to a
+    // specific ConcatenatingAudioSource, so it silently carried over into
+    // every subsequent loadQueue() call from a completely different tab,
+    // even ones that displayed songs in plain A-Z order. Now every call
+    // explicitly sets shuffle to match what was actually requested.
+    await setShuffleEnabled(shuffle);
+    if (shuffle && songs.isNotEmpty) {
+      startIndex = DateTime.now().millisecondsSinceEpoch % songs.length;
     }
     await loadQueue(songs, startIndex: startIndex);
     await play();
@@ -112,19 +112,10 @@ class PlaybackController extends BaseAudioHandler with QueueHandler, SeekHandler
     }
 
     _queue.add(song);
-    final mediaItem = MediaItem(
-      id: song.id,
-      title: song.title ?? song.filename,
-      artist: song.artist,
-      album: song.album,
-      duration: song.duration,
-      artUri: song.artworkPath != null ? Uri.file(song.artworkPath!) : null,
-    );
-
     // Add to the live just_audio playlist
     await _playlist!.add(AudioSource.uri(
       Uri.file(song.path),
-      tag: mediaItem,
+      tag: song.toMediaItem(),
     ));
     
     // Update audio_service queue
@@ -142,18 +133,9 @@ class PlaybackController extends BaseAudioHandler with QueueHandler, SeekHandler
     final insertIndex = currentIndex + 1;
 
     _queue.insert(insertIndex, song);
-    final mediaItem = MediaItem(
-      id: song.id,
-      title: song.title ?? song.filename,
-      artist: song.artist,
-      album: song.album,
-      duration: song.duration,
-      artUri: song.artworkPath != null ? Uri.file(song.artworkPath!) : null,
-    );
-
     await _playlist!.insert(insertIndex, AudioSource.uri(
       Uri.file(song.path),
-      tag: mediaItem,
+      tag: song.toMediaItem(),
     ));
 
     queue.add(_playlist!.sequence.map((s) => s.tag as MediaItem).toList());

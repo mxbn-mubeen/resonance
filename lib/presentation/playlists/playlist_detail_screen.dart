@@ -5,6 +5,7 @@ import '../../core/di/providers.dart';
 import '../../domain/entities/library_entities.dart';
 import '../../domain/entities/song.dart';
 import '../widgets/mini_player.dart';
+import 'components/playlist_empty_views.dart';
 import 'components/playlist_header.dart';
 import 'components/playlist_song_tile.dart';
 
@@ -179,29 +180,11 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                 }).toList();
 
           if (songs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.queue_music, size: 72,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.4)),
-                  const SizedBox(height: 16),
-                  Text('No songs in this playlist yet',
-                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                  const SizedBox(height: 8),
-                  Text('Tap ⋮ on any song and choose "Add to playlist"',
-                      style: TextStyle(
-                          fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                ],
-              ),
-            );
+            return const EmptyPlaylistView();
           }
 
           if (filtered.isEmpty) {
-            return Center(
-              child: Text('No results for "$_filter"',
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            );
+            return EmptySearchView(filter: _filter);
           }
 
           return Column(

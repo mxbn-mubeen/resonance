@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../application/metadata/metadata_fetch_runner.dart';
-import '../metadata_history_screen.dart';
+import '../metadata_fetch_screen.dart';
 
 class SettingsMetadataSection extends ConsumerWidget {
   const SettingsMetadataSection({super.key});
@@ -31,21 +30,13 @@ class SettingsMetadataSection extends ConsumerWidget {
           leading: const Icon(Icons.auto_fix_high),
           title: const Text('Fetch missing metadata now'),
           subtitle: const Text('MusicBrainz → iTunes → local ID3 fallback'),
-          onTap: () => MetadataFetchRunner.run(context, ref),
-        ),
-        ListTile(
-          leading: const Icon(Icons.history),
-          title: const Text('View fetch history'),
-          subtitle: const Text('See past metadata fetch runs and their results'),
-          onTap: () => _showFetchHistory(context, ref),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MetadataFetchScreen()),
+            );
+          },
         ),
       ],
-    );
-  }
-
-  void _showFetchHistory(BuildContext context, WidgetRef ref) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const MetadataHistoryScreen()),
     );
   }
 }

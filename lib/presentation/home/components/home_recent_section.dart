@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/di/providers.dart';
 import '../../../domain/entities/song.dart';
-import '../../player/player_screen.dart';
+import '../../player/player_route.dart';
 
 class HomeRecentSection extends ConsumerWidget {
   const HomeRecentSection({super.key});
@@ -30,7 +30,7 @@ class HomeRecentSection extends ConsumerWidget {
                 onTap: () async {
                   await ref.read(playbackControllerProvider).playSongs(recent, startIndex: index);
                   if (context.mounted) {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
+                    Navigator.of(context).push(PlayerRoute());
                   }
                 },
                 child: SizedBox(
@@ -62,7 +62,7 @@ class HomeRecentSection extends ConsumerWidget {
                                 onTap: () async {
                                   await ref.read(playbackControllerProvider).playSongs(recent, startIndex: index);
                                   if (context.mounted) {
-                                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
+                                    Navigator.of(context).push(PlayerRoute());
                                   }
                                 },
                               ),

@@ -34,6 +34,16 @@ class SongRecord {
   // matched or not) and not every song gets a MetadataRecord.
   String? plainLyrics;
   String? syncedLyrics; // raw LRC-format text, parsed for display by LrcParser
+
+  // Metadata-fetch retry tracking. Without this, a song that genuinely has
+  // no online match AND no artwork available anywhere (embedded or online)
+  // matches the "needs fetching" filter forever, since artworkPath stays
+  // null no matter how many times it's retried - it gets reprocessed on
+  // EVERY single run indefinitely, burning API calls/time on songs that
+  // will never resolve while other genuinely-fixable songs wait behind it
+  // in the queue.
+  int fetchAttemptCount = 0;
+  DateTime? lastFetchAttemptAt;
 }
 
 /// Mirrors the "Metadata Table".
@@ -110,6 +120,15 @@ class MetadataFetchHistoryRecord {
   int totalNoMatch = 0;
   int totalErrors = 0;
   String? firstError;
+  // New: how long the run took in seconds
+  int durationSeconds = 0;
+  // New: how many songs were matched via API vs local ID3 vs error
+  int matchedByApi = 0;
+  int matchedByLocal = 0;
+  // New: titles of first 30 no-match songs for drill-down view
+  List<String> noMatchSongTitles = [];
+  // New: first error message per source
+  String? apiErrorSample;
 }
 
 /// Tracks Library Health report runs.

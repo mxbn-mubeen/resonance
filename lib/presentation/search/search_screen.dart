@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/di/providers.dart';
-import '../player/player_screen.dart';
+import '../player/player_route.dart';
 import '../widgets/song_tile.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
@@ -61,6 +61,32 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               setState(() {});
             }
           },
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: ['all', 'songs', 'artists', 'albums'].map((filter) {
+                  final isSelected = ref.watch(searchFilterProvider) == filter;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: FilterChip(
+                      label: Text(filter[0].toUpperCase() + filter.substring(1)),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        if (selected) {
+                          ref.read(searchFilterProvider.notifier).state = filter;
+                        }
+                      },
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
         ),
       ),
       body: resultsAsync.when(
@@ -160,7 +186,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       .read(playbackControllerProvider)
                       .playSongs(results, startIndex: index);
                   if (context.mounted) {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
+                    Navigator.of(context).push(PlayerRoute());
                   }
                   final repo = await ref.read(libraryRepositoryProvider.future);
                   await repo.incrementPlayCount(song.id);

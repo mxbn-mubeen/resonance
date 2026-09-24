@@ -19,11 +19,19 @@ import 'components/player_content.dart';
 /// streams as MiniPlayer and the OS notification - one source of truth,
 /// so this screen, the mini player, and the lock-screen notification never
 /// disagree about what's playing.
-class PlayerScreen extends ConsumerWidget {
+class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PlayerScreen> createState() => _PlayerScreenState();
+}
+
+class _PlayerScreenState extends ConsumerState<PlayerScreen> {
+  Color? _cachedBackdropColor;
+  String? _cachedArtworkPath;
+
+  @override
+  Widget build(BuildContext context) {
     final controller = ref.watch(playbackControllerProvider);
     final paletteService = ref.watch(artworkPaletteServiceProvider);
 
@@ -34,44 +42,49 @@ class PlayerScreen extends ConsumerWidget {
           final item = mediaSnapshot.data;
           final artworkPath = item?.artUri?.toFilePath();
 
-          return FutureBuilder<Color?>(
-            // Cached by ArtworkPaletteService per artwork path, so this
-            // only does real extraction work once per track, not per frame.
-            future: paletteService.dominantColorFor(artworkPath),
-            builder: (context, paletteSnapshot) {
-              final backdropColor =
-                  paletteSnapshot.data ?? Theme.of(context).colorScheme.primaryContainer;
+          // Only re-run palette extraction when the artwork actually changes,
+          // not on every playbackState emission (pause, seek, etc.)
+          if (artworkPath != _cachedArtworkPath) {
+            _cachedArtworkPath = artworkPath;
+            paletteService.dominantColorFor(artworkPath).then((color) {
+              if (mounted && color != null) {
+                setState(() => _cachedBackdropColor = color);
+              }
+            });
+          }
 
-              return AnimatedContainer(
-                duration: const Duration(milliseconds: 600),
-                curve: Curves.easeOut,
-                color: backdropColor,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Blurred, scaled-up copy of the artwork behind
-                    // everything - the "cinematic glow" backdrop.
-                    if (artworkPath != null)
-                      Positioned.fill(
-                        child: ImageFiltered(
-                          imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-                          child: Opacity(
-                            opacity: 0.5,
-                            child: Image.file(
-                              File(artworkPath),
-                              fit: BoxFit.cover,
-                              alignment: Alignment.center,
-                            ),
+          final backdropColor =
+              _cachedBackdropColor ?? Theme.of(context).colorScheme.primaryContainer;
+
+          return RepaintBoundary(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 600),
+              curve: Curves.easeOut,
+              color: backdropColor,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (artworkPath != null)
+                    Positioned.fill(
+                      child: ImageFiltered(
+                        imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+                        child: Opacity(
+                          opacity: 0.5,
+                          child: Image.file(
+                            File(artworkPath),
+                            fit: BoxFit.cover,
+                            alignment: Alignment.center,
+                            gaplessPlayback: true,
                           ),
                         ),
                       ),
-                    SafeArea(
-                      child: PlayerContent(item: item, controller: controller, artworkPath: artworkPath),
                     ),
-                  ],
-                ),
-              );
-            },
+                  SafeArea(
+                    child: PlayerContent(item: item, controller: controller, artworkPath: artworkPath),
+                  ),
+                ],
+              ),
+            ),
           );
         },
       ),

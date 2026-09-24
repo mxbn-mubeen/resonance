@@ -6,7 +6,7 @@ import 'package:audio_service/audio_service.dart';
 import '../../../core/di/providers.dart';
 import '../../../domain/entities/library_entities.dart';
 import '../../../domain/entities/song.dart';
-import '../../player/player_screen.dart';
+import '../../player/player_route.dart';
 import '../../widgets/playing_indicator.dart';
 
 class PlaylistSongTile extends ConsumerWidget {
@@ -80,7 +80,7 @@ class PlaylistSongTile extends ConsumerWidget {
               } else if (value == 'play_next') {
                 await ref.read(playbackControllerProvider).playSongs(playlistSongs, startIndex: playlistSongs.indexOf(song));
                 if (context.mounted) {
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
+                  Navigator.of(context).push(PlayerRoute());
                 }
               }
             },
@@ -97,7 +97,7 @@ class PlaylistSongTile extends ConsumerWidget {
       onTap: () async {
         await ref.read(playbackControllerProvider).playSongs(playlistSongs, startIndex: playlistSongs.indexOf(song));
         if (context.mounted) {
-          Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlayerScreen()));
+          Navigator.of(context).push(PlayerRoute());
         }
       },
     );

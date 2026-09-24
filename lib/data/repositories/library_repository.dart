@@ -32,6 +32,8 @@ class LibraryRepository {
         sizeBytes: r.sizeBytes,
         plainLyrics: r.plainLyrics,
         syncedLyrics: r.syncedLyrics,
+        fetchAttemptCount: r.fetchAttemptCount,
+        lastFetchAttemptAt: r.lastFetchAttemptAt,
       );
 
   Future<List<Song>> getAllSongs({bool includeHidden = false}) async {
@@ -42,15 +44,30 @@ class LibraryRepository {
     return records.map(_toEntity).toList();
   }
 
-  Future<List<Song>> search(String queryText) async {
-    final records = await isar.songRecords
-        .filter()
-        .titleContains(queryText, caseSensitive: false)
-        .or()
-        .artistContains(queryText, caseSensitive: false)
-        .or()
-        .albumContains(queryText, caseSensitive: false)
-        .findAll();
+  Future<List<Song>> search(String queryText, {String filter = 'all'}) async {
+    final words = queryText.split(' ').where((w) => w.isNotEmpty).toList();
+    if (words.isEmpty) return [];
+
+    var query = isar.songRecords.filter().hiddenEqualTo(false);
+
+    for (final word in words) {
+      if (filter == 'songs') {
+        query = query.and().titleContains(word, caseSensitive: false);
+      } else if (filter == 'artists') {
+        query = query.and().artistContains(word, caseSensitive: false);
+      } else if (filter == 'albums') {
+        query = query.and().albumContains(word, caseSensitive: false);
+      } else {
+        query = query.and().group((q) => q
+            .titleContains(word, caseSensitive: false)
+            .or()
+            .artistContains(word, caseSensitive: false)
+            .or()
+            .albumContains(word, caseSensitive: false));
+      }
+    }
+
+    final records = await query.findAll();
     return records.map(_toEntity).toList();
   }
 
@@ -124,6 +141,20 @@ class LibraryRepository {
   /// Persists lyrics found via LyricsManager (embedded tag, sidecar .lrc
   /// file, or LRCLIB online fetch) so they're only ever looked up once per
   /// song, not re-fetched every time the lyrics view opens.
+  /// Called once per song after every metadata-fetch processing attempt,
+  /// win or lose - this is what lets SongMetadataProcessor.needsMetadataFetch
+  /// eventually stop retrying a song that genuinely has no online match and
+  /// no artwork available anywhere, instead of reprocessing it forever.
+  Future<void> recordFetchAttempt(String songId) async {
+    await isar.writeTxn(() async {
+      final rec = await isar.songRecords.get(int.parse(songId));
+      if (rec == null) return;
+      rec.fetchAttemptCount += 1;
+      rec.lastFetchAttemptAt = DateTime.now();
+      await isar.songRecords.put(rec);
+    });
+  }
+
   Future<void> updateLyrics(String songId, {String? plain, String? synced}) async {
     await isar.writeTxn(() async {
       final rec = await isar.songRecords.get(int.parse(songId));
