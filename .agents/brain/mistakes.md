@@ -53,3 +53,9 @@
 - Fix: Updated `needsMetadataFetch` to re-queue unlinked songs (`metadataId == null`), eliminated local ID3 tag overwriting in `processSong` (API-only matching), saved matched `MetadataResult` into `MetadataRecord` via `MetadataRepository`, and linked `metadataId` into `SongRecord`.
 - Status: Resolved
 - Date: 2026-11-11
+
+- Problem: GitHub Actions build failed with `FAILURE: Build failed with an exception. * What went wrong: 25.0.5`.
+- Cause: `.github/workflows/build.yml` lacked a Java setup step, causing the runner to default to system Java 25.0.5. Gradle 8.14 does not support Java 25 and crashes on startup.
+- Fix: Added `actions/setup-java@v4` with `distribution: 'temurin'` and `java-version: '17'` to `.github/workflows/build.yml`.
+- Status: Resolved
+- Date: 2026-11-11
