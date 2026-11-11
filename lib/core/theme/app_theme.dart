@@ -16,7 +16,7 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
@@ -48,7 +48,7 @@ class AppTheme {
         indicatorColor: accent.withValues(alpha: 0.2),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: surfaceElevated,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -56,7 +56,7 @@ class AppTheme {
           side: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
         ),
       ),
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: const Color(0xFF171924),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),

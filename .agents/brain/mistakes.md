@@ -59,3 +59,9 @@
 - Fix: Added `actions/setup-java@v4` with `distribution: 'temurin'` and `java-version: '17'` to `.github/workflows/build.yml`.
 - Status: Resolved
 - Date: 2026-11-11
+
+- Problem: Compilation error `The argument type 'CardTheme' can't be assigned to the parameter type 'CardThemeData?'` and `'DialogTheme'` to `'DialogThemeData?'` in `lib/core/theme/app_theme.dart`.
+- Cause: Flutter 3.27+ separated the widget `CardTheme`/`DialogTheme` from the theme data classes `CardThemeData`/`DialogThemeData`.
+- Fix: Updated `cardTheme` to `CardThemeData` and `dialogTheme` to `DialogThemeData`.
+- Status: Resolved
+- Date: 2026-11-11
