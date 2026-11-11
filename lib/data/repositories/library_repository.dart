@@ -83,6 +83,7 @@ class LibraryRepository {
     String? codec,
     int? sizeBytes,
     String? artworkPath,
+    int? metadataId,
   }) async {
     await isar.writeTxn(() async {
       final existing =
@@ -101,6 +102,9 @@ class LibraryRepository {
         ..sizeBytes = sizeBytes;
       if (artworkPath != null) {
         record.artworkPath = artworkPath;
+      }
+      if (metadataId != null) {
+        record.metadataId = metadataId;
       }
       await isar.songRecords.put(record);
     });

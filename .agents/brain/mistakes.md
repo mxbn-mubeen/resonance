@@ -47,3 +47,9 @@
 - Fix: Extracted fetch logic to `application/metadata/metadata_fetch_runner.dart` as a static class; widget now delegates to `MetadataFetchRunner.run()` and is ~100 lines.
 - Status: Resolved
 - Date: 2026-08-10
+
+- Problem: Songs with existing local ID3 tags were not detected for API metadata fetching, failed API matches overwrote tags with unverified local data, and matched API records were never persisted or linked to `SongRecord.metadataId`.
+- Cause: `needsMetadataFetch` only checked for empty artist or missing artwork (ignoring songs that had local tags but no API match), `processSong` had a fallback writing local ID3 data back to the database, and `upsertScannedSong` did not take or persist `metadataId`.
+- Fix: Updated `needsMetadataFetch` to re-queue unlinked songs (`metadataId == null`), eliminated local ID3 tag overwriting in `processSong` (API-only matching), saved matched `MetadataResult` into `MetadataRecord` via `MetadataRepository`, and linked `metadataId` into `SongRecord`.
+- Status: Resolved
+- Date: 2026-11-11

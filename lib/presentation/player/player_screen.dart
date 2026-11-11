@@ -54,22 +54,35 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           }
 
           final backdropColor =
-              _cachedBackdropColor ?? Theme.of(context).colorScheme.primaryContainer;
+              _cachedBackdropColor ?? Theme.of(context).colorScheme.primary;
 
           return RepaintBoundary(
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 600),
-              curve: Curves.easeOut,
-              color: backdropColor,
+              duration: const Duration(milliseconds: 700),
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(0, -0.45),
+                  radius: 1.35,
+                  colors: [
+                    backdropColor.withValues(alpha: 0.55),
+                    backdropColor.withValues(alpha: 0.22),
+                    const Color(0xFF0A0B0F),
+                    const Color(0xFF050608),
+                  ],
+                  stops: const [0.0, 0.42, 0.85, 1.0],
+                ),
+              ),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
+                  // Atmospheric blurred ambient art layer
                   if (artworkPath != null)
                     Positioned.fill(
                       child: ImageFiltered(
-                        imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+                        imageFilter: ImageFilter.blur(sigmaX: 65, sigmaY: 65),
                         child: Opacity(
-                          opacity: 0.5,
+                          opacity: 0.35,
                           child: Image.file(
                             File(artworkPath),
                             fit: BoxFit.cover,
@@ -79,8 +92,33 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                         ),
                       ),
                     ),
+
+                  // Dark vignette gradient for maximum content legibility
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.25),
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.65),
+                            Colors.black.withValues(alpha: 0.92),
+                          ],
+                          stops: const [0.0, 0.3, 0.75, 1.0],
+                        ),
+                      ),
+                    ),
+                  ),
+
                   SafeArea(
-                    child: PlayerContent(item: item, controller: controller, artworkPath: artworkPath),
+                    child: PlayerContent(
+                      item: item,
+                      controller: controller,
+                      artworkPath: artworkPath,
+                      accentColor: backdropColor,
+                    ),
                   ),
                 ],
               ),

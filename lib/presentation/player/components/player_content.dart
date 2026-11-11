@@ -22,8 +22,15 @@ class PlayerContent extends ConsumerStatefulWidget {
   final MediaItem? item;
   final PlaybackController controller;
   final String? artworkPath;
+  final Color? accentColor;
 
-  const PlayerContent({super.key, required this.item, required this.controller, required this.artworkPath});
+  const PlayerContent({
+    super.key,
+    required this.item,
+    required this.controller,
+    required this.artworkPath,
+    this.accentColor,
+  });
 
   @override
   ConsumerState<PlayerContent> createState() => _PlayerContentState();
@@ -58,39 +65,72 @@ class _PlayerContentState extends ConsumerState<PlayerContent> {
     final allSongs = ref.watch(librarySongsProvider).valueOrNull ?? [];
     final song = allSongs.firstWhereOrNull((s) => s.id == widget.item?.id);
 
+    final glowColor = widget.accentColor ?? Colors.blueAccent;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 8, 32, 24),
+      padding: const EdgeInsets.fromLTRB(28, 8, 28, 20),
       child: Column(
         children: [
           // ── Back arrow ──────────────────────────────────────────────────
           Align(
             alignment: Alignment.topLeft,
-            child: IconButton(
-              icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
-              onPressed: () => Navigator.of(context).maybePop(),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 28),
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
             ),
           ),
           const Spacer(),
 
-          // ── Artwork card (RepaintBoundary = never repaints on pause/seek) ──
+          // ── Artwork card with radiant ambient glow shadow ─────────────
           RepaintBoundary(
-            child: Transform(
-              alignment: Alignment.center,
-              transform: Matrix4.identity()
-                ..setEntry(3, 2, 0.0015)
-                ..rotateY(-0.18)
-                ..rotateX(0.05),
-              child: Container(
-                width: 220,
-                height: 220,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: Colors.white.withOpacity(0.12),
+            child: Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: glowColor.withValues(alpha: 0.45),
+                    blurRadius: 42,
+                    spreadRadius: 6,
+                    offset: const Offset(0, 16),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.22),
+                      width: 1.2,
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: widget.artworkPath != null
+                      ? Image.file(
+                          File(widget.artworkPath!),
+                          fit: BoxFit.cover,
+                          gaplessPlayback: true,
+                        )
+                      : Container(
+                          color: const Color(0xFF1E212B),
+                          child: const Icon(Icons.music_note_rounded, size: 84, color: Colors.white60),
+                        ),
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: widget.artworkPath != null
-                    ? Image.file(File(widget.artworkPath!), fit: BoxFit.cover, gaplessPlayback: true)
-                    : const Icon(Icons.music_note, size: 72, color: Colors.white),
               ),
             ),
           ),
@@ -107,15 +147,24 @@ class _PlayerContentState extends ConsumerState<PlayerContent> {
                   children: [
                     Text(
                       widget.item?.title ?? 'Nothing playing',
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Colors.white),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        letterSpacing: -0.4,
+                      ),
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
                       widget.item?.artist ?? '',
-                      style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.75)),
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: Colors.white.withValues(alpha: 0.72),
+                        fontWeight: FontWeight.w400,
+                      ),
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -128,8 +177,11 @@ class _PlayerContentState extends ConsumerState<PlayerContent> {
                 child: song == null
                     ? const SizedBox.shrink()
                     : IconButton(
-                        icon: Icon(song.favorite ? Icons.favorite : Icons.favorite_border,
-                            color: song.favorite ? Colors.pinkAccent : Colors.white70),
+                        icon: Icon(
+                          song.favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                          color: song.favorite ? Colors.pinkAccent : Colors.white70,
+                          size: 26,
+                        ),
                         onPressed: () async {
                           final repo = await ref.read(libraryRepositoryProvider.future);
                           await repo.toggleFavorite(song.id, !song.favorite);
@@ -139,10 +191,9 @@ class _PlayerContentState extends ConsumerState<PlayerContent> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // ── DYNAMIC: Slider + labels + transport controls ───────────────
-          // Only THIS section rebuilds on pause / position tick.
           PlayerDynamicSection(
             controller: widget.controller,
             item: widget.item,
@@ -151,6 +202,7 @@ class _PlayerContentState extends ConsumerState<PlayerContent> {
             onToggleShuffle: _toggleShuffle,
             onToggleRepeat: _toggleRepeat,
             formatDuration: _formatDuration,
+            accentColor: widget.accentColor,
           ),
           const SizedBox(height: 8),
 

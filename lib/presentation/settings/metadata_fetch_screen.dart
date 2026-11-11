@@ -127,7 +127,7 @@ class _StatsCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _SourceChip(label: 'API Match', count: state.matchedByApi, color: Colors.green),
-                  _SourceChip(label: 'Local ID3', count: state.matchedByLocal, color: Colors.blue),
+                  _SourceChip(label: 'Skipped', count: state.matchedByLocal, color: Colors.blue),
                   _SourceChip(label: 'API Error', count: state.matchedByApiError, color: Colors.orange),
                 ],
               ),

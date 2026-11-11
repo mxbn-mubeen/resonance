@@ -157,6 +157,7 @@ class MetadataFetchNotifier extends _$MetadataFetchNotifier {
           apiErrors++;
           apiErrorSample ??= singleResult.lastApiError;
         } else {
+          // SongFetchOutcome.skipped — API returned no match, song left as-is
           localMatch++;
         }
 

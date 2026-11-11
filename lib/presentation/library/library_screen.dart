@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/entities/song.dart';
 import '../../core/di/providers.dart';
+import '../settings/library_health_screen.dart';
 import 'components/library_tabs.dart';
 
 // Sort options
@@ -123,6 +124,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   }
                 });
               },
+            ),
+            IconButton(
+              icon: const Icon(Icons.health_and_safety_outlined),
+              tooltip: 'Library Health',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const LibraryHealthScreen()),
+              ),
             ),
             IconButton(
               icon: const Icon(Icons.refresh),

@@ -15,6 +15,7 @@ class PlayerDynamicSection extends StatelessWidget {
   final VoidCallback onToggleShuffle;
   final VoidCallback onToggleRepeat;
   final String Function(Duration) formatDuration;
+  final Color? accentColor;
 
   const PlayerDynamicSection({
     super.key,
@@ -25,11 +26,13 @@ class PlayerDynamicSection extends StatelessWidget {
     required this.onToggleShuffle,
     required this.onToggleRepeat,
     required this.formatDuration,
+    this.accentColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final total = item?.duration ?? Duration.zero;
+    final trackAccent = accentColor ?? Theme.of(context).colorScheme.primary;
 
     return StreamBuilder<PlaybackState>(
       stream: controller.playbackState,
@@ -48,9 +51,13 @@ class PlayerDynamicSection extends StatelessWidget {
               children: [
                 SliderTheme(
                   data: SliderTheme.of(context).copyWith(
-                    activeTrackColor: Colors.white,
-                    inactiveTrackColor: Colors.white.withValues(alpha: 0.25),
+                    trackHeight: 3.5,
+                    activeTrackColor: trackAccent,
+                    inactiveTrackColor: Colors.white.withValues(alpha: 0.16),
                     thumbColor: Colors.white,
+                    overlayColor: trackAccent.withValues(alpha: 0.2),
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6.5, elevation: 3),
+                    trackShape: const RoundedRectSliderTrackShape(),
                   ),
                   child: Slider(
                     value: total.inMilliseconds > 0
@@ -63,15 +70,32 @@ class PlayerDynamicSection extends StatelessWidget {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(formatDuration(position), style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                      Text(formatDuration(total), style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                      Text(
+                        formatDuration(position),
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.65),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                      Text(
+                        formatDuration(total),
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.65),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 12),
                 PlayerControls(
                   controller: controller,
                   shuffleEnabled: shuffleEnabled,
@@ -79,6 +103,7 @@ class PlayerDynamicSection extends StatelessWidget {
                   playing: playing,
                   onToggleShuffle: onToggleShuffle,
                   onToggleRepeat: onToggleRepeat,
+                  accentColor: trackAccent,
                 ),
               ],
             );

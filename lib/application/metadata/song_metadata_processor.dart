@@ -4,11 +4,12 @@ import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../data/repositories/library_repository.dart';
+import '../../data/repositories/metadata_repository.dart';
+import '../../domain/entities/library_entities.dart';
 import '../artwork/artwork_manager.dart';
-import 'metadata_cleaner.dart';
 import 'song_matcher.dart';
 
-enum SongFetchOutcome { apiMatch, localId3, apiError }
+enum SongFetchOutcome { apiMatch, skipped, apiError }
 
 class SingleSongProcessResult {
   final bool isNoMatch;
@@ -40,13 +41,27 @@ class SongMetadataProcessor {
   /// previously duplicated (and able to drift out of sync) between
   /// metadata_fetch_runner.dart's pre-flight count and
   /// background_metadata_worker.dart's actual processing loop.
+  ///
+  /// A song needs a fetch if ANY of the following is true:
+  ///   - artist is empty / unknown / contains garbage site tags
+  ///   - no artwork cached
+  ///   - never successfully matched via API (metadataId == null)
+  ///
+  /// Songs that only ever got local-ID3 names (prior runs applied fallback)
+  /// are therefore correctly re-queued for an API attempt, since they will
+  /// have no metadataId even though they may have a non-empty artist string.
   static bool needsMetadataFetch(dynamic song) {
     final a = (song.artist?.trim() as String? ?? '').toLowerCase();
     final t = (song.title?.trim() as String? ?? '').toLowerCase();
     final hasGarbage = kWebsiteBlacklist.any((site) => a.contains(site) || t.contains(site));
+
+    // A song is considered needing a fetch if its tags look bad OR if it
+    // has never been confirmed by an API match (metadataId == null).
+    final neverApiMatched = song.metadataId == null;
     final looksUnknown =
         a.isEmpty || a == 'unknown artist' || a == '<unknown>' || song.artworkPath == null || hasGarbage;
-    if (!looksUnknown) return false;
+
+    if (!looksUnknown && !neverApiMatched) return false;
 
     final attempts = (song.fetchAttemptCount as int?) ?? 0;
     if (attempts < _maxAttemptsBeforeCooldown) return true;
@@ -56,9 +71,16 @@ class SongMetadataProcessor {
     return DateTime.now().difference(lastAttempt) >= _retryCooldown;
   }
 
-  /// Processes a single song, fetching metadata and artwork, and upserting into the DB.
-  /// Returns a [SingleSongProcessResult] indicating if the song was a no-match (used local ID3).
-  /// Throws an exception if an error occurs.
+  /// Processes a single song: calls the API (MusicBrainz → iTunes) and, if
+  /// a match is found, writes updated title/artist/album/artwork to the DB.
+  ///
+  /// **No local ID3 fallback.** If the API returns no match the song's
+  /// existing tags are left untouched — only embedded artwork is extracted
+  /// (purely offline, no network) and cached if the song has none yet.
+  /// The fetch attempt counter is always incremented so the cooldown logic
+  /// in [needsMetadataFetch] eventually stops retrying hopeless songs.
+  ///
+  /// Throws if an unexpected exception escapes (callers should catch).
   static Future<SingleSongProcessResult> processSong({
     required dynamic song,
     required LibraryRepository libraryRepo,
@@ -67,6 +89,7 @@ class SongMetadataProcessor {
     required int maxDimension,
     required int jpegQuality,
   }) async {
+    // --- 1. API lookup ---
     dynamic result;
     String? apiError;
     try {
@@ -81,42 +104,18 @@ class SongMetadataProcessor {
       apiError = e.toString();
     }
 
-    String finalTitle = song.title ?? song.filename;
-    String finalArtist = song.artist ?? 'Unknown Artist';
-    String? finalAlbum = song.album;
-    bool isNoMatch = false;
-
-    if (result != null) {
-      finalTitle = result.officialTitle;
-      finalArtist = result.officialArtist;
-      finalAlbum = result.album;
-    } else {
-      isNoMatch = true;
-      try {
-        final metadata = readMetadata(File(song.path), getImage: false);
-        final localArtist = metadata.artist?.trim() ?? '';
-        final localTitle = metadata.title?.trim() ?? '';
-        final localAlbum = metadata.album?.trim() ?? '';
-        if (localTitle.isNotEmpty) finalTitle = MetadataCleaner.clean(localTitle);
-        if (localArtist.isNotEmpty &&
-            localArtist.toLowerCase() != 'unknown artist') {
-          finalArtist = MetadataCleaner.clean(localArtist);
-        }
-        if (localAlbum.isNotEmpty) finalAlbum = MetadataCleaner.clean(localAlbum);
-      } catch (_) {
-        finalTitle = MetadataCleaner.clean(finalTitle);
-        finalArtist = MetadataCleaner.clean(finalArtist);
-      }
-    }
+    final bool isNoMatch = result == null;
 
     final outcome = result != null
         ? SongFetchOutcome.apiMatch
         : apiError != null
             ? SongFetchOutcome.apiError
-            : SongFetchOutcome.localId3;
+            : SongFetchOutcome.skipped;
 
+    // --- 2. Artwork: always try embedded first (offline), then API URL ---
     String? localArtworkPath = song.artworkPath;
     if (localArtworkPath == null) {
+      // Extract embedded artwork regardless of whether the API matched.
       try {
         final metadataImg = readMetadata(File(song.path), getImage: true);
         final pictures = metadataImg.pictures;
@@ -133,6 +132,7 @@ class SongMetadataProcessor {
         }
       } catch (_) {}
 
+      // Only download API artwork when we have an actual match.
       if (localArtworkPath == null && result != null && result.artworkUrl != null) {
         try {
           localArtworkPath = await artworkMgr.downloadAndCache(
@@ -145,16 +145,40 @@ class SongMetadataProcessor {
       }
     }
 
-    await libraryRepo.upsertScannedSong(
-      path: song.path,
-      filename: song.filename,
-      duration: song.duration,
-      modified: song.modified,
-      title: finalTitle,
-      artist: finalArtist,
-      album: finalAlbum,
-      artworkPath: localArtworkPath,
-    );
+    // --- 3. Persist — only write tags when API matched; skip upsert otherwise ---
+    if (result != null) {
+      int? savedMetadataId;
+      try {
+        final metaRepo = MetadataRepository(libraryRepo.isar);
+        final idStr = await metaRepo.saveMatch(result as MetadataResult);
+        savedMetadataId = int.tryParse(idStr);
+      } catch (_) {}
+
+      await libraryRepo.upsertScannedSong(
+        path: song.path,
+        filename: song.filename,
+        duration: song.duration,
+        modified: song.modified,
+        title: result.officialTitle,
+        artist: result.officialArtist,
+        album: result.album,
+        artworkPath: localArtworkPath,
+        metadataId: savedMetadataId,
+      );
+    } else if (localArtworkPath != null && localArtworkPath != song.artworkPath) {
+      // API missed but we found embedded artwork — persist only the artwork.
+      await libraryRepo.upsertScannedSong(
+        path: song.path,
+        filename: song.filename,
+        duration: song.duration,
+        modified: song.modified,
+        title: song.title ?? song.filename,
+        artist: song.artist,
+        album: song.album,
+        artworkPath: localArtworkPath,
+      );
+    }
+
     await libraryRepo.recordFetchAttempt(song.id);
 
     return SingleSongProcessResult(

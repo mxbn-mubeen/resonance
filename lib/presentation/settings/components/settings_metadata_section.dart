@@ -29,7 +29,7 @@ class SettingsMetadataSection extends ConsumerWidget {
         ListTile(
           leading: const Icon(Icons.auto_fix_high),
           title: const Text('Fetch missing metadata now'),
-          subtitle: const Text('MusicBrainz → iTunes → local ID3 fallback'),
+          subtitle: const Text('MusicBrainz → iTunes · API-only, no local tag fallback'),
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const MetadataFetchScreen()),
