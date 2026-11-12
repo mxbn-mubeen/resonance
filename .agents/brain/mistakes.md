@@ -65,3 +65,9 @@
 - Fix: Updated `cardTheme` to `CardThemeData` and `dialogTheme` to `DialogThemeData`.
 - Status: Resolved
 - Date: 2026-11-11
+
+- Problem: Updating the existing app on Android phone failed with "App not installed" / package conflict error.
+- Cause: Release builds in `android/app/build.gradle.kts` were signed using the ephemeral `debug` signingConfig. GitHub Actions runners generate a new ephemeral debug key each run, and local developer machines have different debug keys. Android strictly blocks APK updates if the signing certificate does not match the installed version.
+- Fix: Created a dedicated permanent keystore `android/app/resonance-keystore.jks`, whitelisted it in `android/.gitignore`, and configured `android/app/build.gradle.kts` to sign all release builds with this keystore so every build has an identical signature.
+- Status: Resolved
+- Date: 2026-11-12
