@@ -203,7 +203,6 @@ class SongMatcher {
 
     return best;
   }
-  }
 
   /// Weighted scoring: Title, Artist, Album, Duration
   double _score({

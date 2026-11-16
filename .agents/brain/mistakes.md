@@ -77,3 +77,9 @@
 - Fix: Added `ResponseType.plain` and explicit `jsonDecode` to remote APIs; filtered out "Unknown Artist" before API queries; passed `knownTitle` from `SongMetadataProcessor` into `SongMatcher`; implemented `updateArtworkPath` and `deleteSongById` in `LibraryRepository` and wired up "Clear Stale" and "Review & Delete" actions; redesigned `HealthHistoryScreen` with swipe-to-delete, expandable visual score charts, and clear all history dialog.
 - Status: Resolved
 - Date: 2026-11-16
+
+- Problem: GitHub Actions build failed with `song_matcher.dart:244:1: Expected a method, getter, setter or operator declaration`.
+- Cause: An accidental duplicate closing brace `}` at line 206 closed `class SongMatcher` prematurely, causing `_score` and `_yearFrom` to be parsed outside the class.
+- Fix: Removed the duplicate closing brace at line 206.
+- Status: Resolved
+- Date: 2026-11-16
