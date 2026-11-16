@@ -53,10 +53,21 @@ class IncludedFoldersNotifier extends AsyncNotifier<List<String>> {
   }
 
   Future<void> addFolder(String path) async {
+    await addFolders([path]);
+  }
+
+  Future<void> addFolders(List<String> paths) async {
     final prefs = await ref.watch(sharedPreferencesProvider.future);
     final current = state.value ?? [];
-    if (!current.contains(path)) {
-      final updated = [...current, path];
+    final updated = List<String>.from(current);
+    bool changed = false;
+    for (final p in paths) {
+      if (!updated.contains(p)) {
+        updated.add(p);
+        changed = true;
+      }
+    }
+    if (changed) {
       await prefs.setStringList('included_folders', updated);
       state = AsyncValue.data(updated);
     }

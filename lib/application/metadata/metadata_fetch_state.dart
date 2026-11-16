@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../core/di/providers.dart';
 import '../../data/local/isar_schemas.dart';
 import 'background_metadata_worker.dart';
+import 'background_notification_service.dart';
 import 'song_matcher.dart';
 import 'song_metadata_processor.dart';
 
@@ -105,6 +106,9 @@ class MetadataFetchNotifier extends _$MetadataFetchNotifier {
       processedSongs: 0,
     );
 
+    final prefs = await ref.read(sharedPreferencesProvider.future);
+    await prefs.setBool('is_foreground_fetching', true);
+
     await Workmanager().registerOneOffTask(
       kMetadataFetchTaskName,
       kMetadataFetchTaskName,
@@ -180,9 +184,14 @@ class MetadataFetchNotifier extends _$MetadataFetchNotifier {
         matchedByApiError: apiErrors,
         elapsedSeconds: stopwatch.elapsed.inSeconds,
       );
+
+      if ((i + 1) % 2 == 0 || (i + 1) == unknown.length) {
+        BackgroundNotificationService.postProgressNotification(i + 1, unknown.length);
+      }
     }
 
     stopwatch.stop();
+    await prefs.setBool('is_foreground_fetching', false);
 
     try {
       final historyRepo = await ref.read(metadataFetchHistoryRepositoryProvider.future);

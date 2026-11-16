@@ -83,3 +83,9 @@
 - Fix: Removed the duplicate closing brace at line 206.
 - Status: Resolved
 - Date: 2026-11-16
+
+- Problem: During metadata fetch, exiting/backgrounding the app caused the notification progress to reset from `3/189` down to `0/186`.
+- Cause: WorkManager started concurrently in a background isolate, found 186 songs left (since 3 were already processed by the foreground), and immediately dispatched `onProgress(0, 186)` to the system notification tray, overwriting live foreground progress.
+- Fix: Added `is_foreground_fetching` flag check in `callbackDispatcher` to prevent background WorkManager from running concurrently with the active foreground fetch loop, removed the premature initial `onProgress(0, ...)` notification reset, and routed live notification updates directly from `MetadataFetchNotifier`.
+- Status: Resolved
+- Date: 2026-11-16

@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/di/providers.dart';
 import '../../data/local/isar_schemas.dart';
 import '../../domain/entities/song.dart';
-import 'components/duplicates_dialog.dart';
 import 'components/health_hero_card.dart';
 import 'components/health_issue_tile.dart';
+import 'duplicate_tracker_screen.dart';
 import 'health_history_screen.dart';
 import 'metadata_fetch_screen.dart';
 
@@ -126,23 +126,13 @@ class _LibraryHealthScreenState extends ConsumerState<LibraryHealthScreen> {
 
   Future<void> _showDuplicatesDialog() async {
     if (_duplicateSongs.isEmpty) return;
-    final repo = await ref.read(libraryRepositoryProvider.future);
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => DuplicatesDialog(
-        duplicates: _duplicateSongs,
-        onDelete: (song) async {
-          await repo.deleteSongById(song.id);
-          if (mounted) {
-            setState(() {
-              _duplicateSongs.remove(song);
-              _duplicatesCount = (_duplicatesCount - 1).clamp(0, _duplicatesCount);
-            });
-          }
-        },
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => DuplicateTrackerScreen(duplicates: _duplicateSongs),
       ),
     );
+    // Refresh health scan after returning from duplicate tracker
+    _runHealthCheck(silent: true);
   }
 
   @override

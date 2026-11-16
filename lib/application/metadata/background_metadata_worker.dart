@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 
 import 'background_notification_service.dart';
@@ -27,9 +28,15 @@ void callbackDispatcher() {
   Workmanager().executeTask((taskName, inputData) async {
     if (taskName != kMetadataFetchTaskName) return true;
 
-    final stopwatch = Stopwatch()..start();
-
     WidgetsFlutterBinding.ensureInitialized();
+
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('is_foreground_fetching') ?? false) {
+      // Foreground is actively running the fetch with live updates. Exit to avoid collision.
+      return true;
+    }
+
+    final stopwatch = Stopwatch()..start();
 
     final dir = await getApplicationDocumentsDirectory();
     final isar = await Isar.open(
@@ -133,11 +140,6 @@ class BackgroundMetadataWorker {
     bool abortedByTimeout = false;
     SongFetchOutcome? lastOutcome;
     String? lastApiError;
-
-    // Show initial notification before processing starts
-    if (onProgress != null) {
-      onProgress(0, songs.length);
-    }
 
     for (final song in songs) {
       if (stopwatch != null && timeLimitMinutes != null) {

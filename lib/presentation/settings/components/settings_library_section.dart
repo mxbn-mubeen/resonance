@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/di/providers.dart';
+import 'folder_picker_sheet.dart';
 
 class SettingsLibrarySection extends ConsumerWidget {
   const SettingsLibrarySection({super.key});
@@ -12,6 +12,7 @@ class SettingsLibrarySection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final wifiOnly = ref.watch(wifiOnlyDownloadsProvider);
     final artworkQuality = ref.watch(artworkQualityProvider);
+    final includedAsync = ref.watch(includedFoldersProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -21,25 +22,34 @@ class SettingsLibrarySection extends ConsumerWidget {
           child: Text('Folders', style: Theme.of(context).textTheme.labelLarge),
         ),
         ListTile(
-          leading: const Icon(Icons.folder),
-          title: const Text('Add folder to scan'),
-          subtitle: const Text('Choose specific directories to include'),
-          onTap: () async {
-            String? selectedDirectory = await FilePicker.getDirectoryPath();
-            if (selectedDirectory != null) {
-              ref.read(includedFoldersProvider.notifier).addFolder(selectedDirectory);
-            }
-          },
+          leading: const Icon(Icons.create_new_folder_rounded),
+          title: const Text('Add folders to scan'),
+          subtitle: const Text('Select multiple folders or common directories at once'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () => FolderPickerSheet.show(context),
         ),
-        ...ref.watch(includedFoldersProvider).when(
-          data: (folders) => folders.map((f) => ListTile(
-            leading: const Icon(Icons.subdirectory_arrow_right),
-            title: Text(f),
-            trailing: IconButton(
-              icon: const Icon(Icons.remove_circle, color: Colors.redAccent),
-              onPressed: () => ref.read(includedFoldersProvider.notifier).removeFolder(f),
-            ),
-          )).toList(),
+        ...includedAsync.when(
+          data: (folders) {
+            if (folders.isEmpty) {
+              return [
+                const ListTile(
+                  dense: true,
+                  leading: Icon(Icons.info_outline, size: 20, color: Colors.orangeAccent),
+                  title: Text('No custom folders added', style: TextStyle(fontSize: 13)),
+                  subtitle: Text('Tap "Add folders to scan" to include music locations.', style: TextStyle(fontSize: 11)),
+                ),
+              ];
+            }
+            return folders.map((f) => ListTile(
+              dense: true,
+              leading: const Icon(Icons.folder_outlined, size: 20),
+              title: Text(f, style: const TextStyle(fontSize: 13)),
+              trailing: IconButton(
+                icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 18),
+                onPressed: () => ref.read(includedFoldersProvider.notifier).removeFolder(f),
+              ),
+            )).toList();
+          },
           loading: () => [const Center(child: CircularProgressIndicator())],
           error: (err, _) => [ListTile(title: Text('Error: $err'))],
         ),

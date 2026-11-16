@@ -32,49 +32,55 @@ class _AlbumsTabState extends State<AlbumsTab> {
           child: TextField(
             decoration: InputDecoration(
               hintText: 'Filter albums...',
-              prefixIcon: const Icon(Icons.search),
+              prefixIcon: const Icon(Icons.search, size: 20),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(30),
+                borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
               filled: true,
-              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-              contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              contentPadding: EdgeInsets.zero,
             ),
             onChanged: (v) => setState(() => _filter = v),
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+          child: Row(
+            children: [
+              Text(
+                '${filteredKeys.length} albums',
+                style: const TextStyle(fontSize: 12, color: Colors.white54),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
         Expanded(
-          child: ListView.builder(
+          child: GridView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.76,
+              crossAxisSpacing: 14,
+              mainAxisSpacing: 14,
+            ),
             itemCount: filteredKeys.length,
             itemBuilder: (context, index) {
               final album = filteredKeys[index];
               final albumSongs = widget.albums[album]!;
-              final coverSong = albumSongs.first;
-              return ListTile(
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: coverSong.artworkPath != null
-                      ? Image.file(
-                          File(coverSong.artworkPath!),
-                          width: 48,
-                          height: 48,
-                          fit: BoxFit.cover,
-                        )
-                      : Container(
-                          width: 48,
-                          height: 48,
-                          color: Theme.of(context).colorScheme.primaryContainer,
-                          child: Icon(
-                            Icons.album,
-                            color: Theme.of(context).colorScheme.onPrimaryContainer,
-                          ),
-                        ),
-                ),
-                title: Text(album, maxLines: 1, overflow: TextOverflow.ellipsis),
-                subtitle: Text(
-                  '${coverSong.artist ?? "Unknown Artist"} · ${albumSongs.length} songs',
-                ),
+              final coverSong = albumSongs.firstWhere(
+                (s) => s.artworkPath != null && File(s.artworkPath!).existsSync(),
+                orElse: () => albumSongs.first,
+              );
+              final hasArtwork = coverSong.artworkPath != null &&
+                  File(coverSong.artworkPath!).existsSync();
+
+              return _AlbumGridCard(
+                album: album,
+                artist: coverSong.artist ?? 'Unknown Artist',
+                songCount: albumSongs.length,
+                hasArtwork: hasArtwork,
+                artworkPath: coverSong.artworkPath,
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -91,6 +97,81 @@ class _AlbumsTabState extends State<AlbumsTab> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _AlbumGridCard extends StatelessWidget {
+  final String album;
+  final String artist;
+  final int songCount;
+  final bool hasArtwork;
+  final String? artworkPath;
+  final VoidCallback onTap;
+
+  const _AlbumGridCard({
+    required this.album,
+    required this.artist,
+    required this.songCount,
+    required this.hasArtwork,
+    required this.artworkPath,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: hasArtwork
+                  ? Image.file(
+                      File(artworkPath!),
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    )
+                  : Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            theme.colorScheme.primary.withValues(alpha: 0.5),
+                            theme.colorScheme.tertiary.withValues(alpha: 0.3),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.album_rounded,
+                        color: theme.colorScheme.primary,
+                        size: 48,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            album,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '$artist · $songCount track${songCount == 1 ? '' : 's'}',
+            style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 }
