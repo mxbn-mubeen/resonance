@@ -65,6 +65,7 @@ class SongMatcher {
 
   Future<MetadataResult?> match({
     required String rawFilename,
+    String? knownTitle,
     String? knownArtist,
     String? knownAlbum,
     Duration? knownDuration,
@@ -73,15 +74,33 @@ class SongMatcher {
   }) async {
     if (offlineMode) return null;
 
-    final cleanedQuery = MetadataCleaner.clean(rawFilename);
+    // Prefer clean knownTitle if available, otherwise clean the filename
+    String cleanedQuery = '';
+    if (knownTitle != null &&
+        knownTitle.trim().isNotEmpty &&
+        !knownTitle.toLowerCase().contains('unknown') &&
+        !knownTitle.contains(RegExp(r'\.(mp3|m4a|flac|wav|ogg)$', caseSensitive: false))) {
+      cleanedQuery = MetadataCleaner.clean(knownTitle);
+    }
+    if (cleanedQuery.isEmpty) {
+      cleanedQuery = MetadataCleaner.clean(rawFilename);
+    }
     if (cleanedQuery.isEmpty) return null;
+
+    // Clean artist: filter out "Unknown Artist" placeholders
+    final effectiveArtist = (knownArtist != null &&
+            knownArtist.trim().isNotEmpty &&
+            !knownArtist.toLowerCase().contains('unknown'))
+        ? knownArtist.trim()
+        : null;
 
     // --- 1. Try MusicBrainz first (authoritative, language-agnostic) ---
     MetadataResult? mbResult;
+    String? networkError;
     try {
       final mbCandidates = await musicBrainz.searchRecording(
         title: cleanedQuery,
-        artist: knownArtist,
+        artist: effectiveArtist,
         limit: 5,
       );
 
@@ -110,7 +129,7 @@ class SongMatcher {
           candidateArtist: artist,
           candidateAlbum: album,
           candidateDurationMs: ((c['length'] as num?)?.toInt()),
-          knownArtist: knownArtist,
+          knownArtist: effectiveArtist,
           knownAlbum: knownAlbum,
           knownDuration: knownDuration,
         );
@@ -126,21 +145,18 @@ class SongMatcher {
           );
         }
       }
-    } catch (_) {
-      // MusicBrainz failed (rate-limit, network error) — fall through to iTunes
+    } catch (e) {
+      networkError ??= e.toString();
     }
 
-    // If MusicBrainz returned a high-confidence result, use it - no need to
-    // burn iTunes storefront calls when we already have a good answer.
+    // If MusicBrainz returned a high-confidence result, use it
     if (mbResult != null && mbResult.confidence >= 0.65) return mbResult;
 
     // --- 2. Fall back to iTunes, trying storefronts in order ---
     MetadataResult? best = mbResult;
     double bestScore = mbResult?.confidence ?? 0;
 
-    // Throttle once before the first iTunes call to give MusicBrainz's
-    // 1 req/sec policy breathing room after the call above.
-    await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(const Duration(milliseconds: 300));
 
     for (final country in _storefrontsToTry) {
       try {
@@ -152,7 +168,7 @@ class SongMatcher {
             candidateArtist: c['artistName'] as String? ?? '',
             candidateAlbum: c['collectionName'] as String?,
             candidateDurationMs: (c['trackTimeMillis'] as num?)?.toInt(),
-            knownArtist: knownArtist,
+            knownArtist: effectiveArtist,
             knownAlbum: knownAlbum,
             knownDuration: knownDuration,
           );
@@ -172,20 +188,21 @@ class SongMatcher {
             );
           }
         }
-      } catch (_) {
-        // This storefront failed (network hiccup, rate limit) - move on to
-        // the next one rather than aborting the whole match attempt.
+      } catch (e) {
+        networkError ??= e.toString();
       }
 
-      if (bestScore >= _earlyStopConfidence) break; // good enough, stop trying more storefronts
+      if (bestScore >= _earlyStopConfidence) break;
 
-      // iTunes' unauthenticated search endpoint has an unofficial per-IP
-      // rate limit; a short gap between storefront attempts for the same
-      // song is cheap insurance against getting throttled mid-scan.
       await Future.delayed(const Duration(milliseconds: 200));
     }
 
+    if (best == null && networkError != null) {
+      throw Exception(networkError);
+    }
+
     return best;
+  }
   }
 
   /// Weighted scoring: Title, Artist, Album, Duration

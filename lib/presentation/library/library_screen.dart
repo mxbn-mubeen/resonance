@@ -5,9 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/entities/song.dart';
 import '../../core/di/providers.dart';
 import '../settings/library_health_screen.dart';
-import 'components/library_tabs.dart';
+import 'components/tabs/albums_tab.dart';
+import 'components/tabs/artists_tab.dart';
+import 'components/tabs/favourites_tab.dart';
+import 'components/tabs/folders_tab.dart';
+import 'components/tabs/songs_tab.dart';
 
-// Sort options
 enum _SortMode { titleAsc, titleDesc, artist, dateAdded }
 
 class LibraryScreen extends ConsumerStatefulWidget {
@@ -35,7 +38,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       case _SortMode.titleAsc:
         list.sort((a, b) => (a.title ?? a.filename).compareTo(b.title ?? b.filename));
       case _SortMode.titleDesc:
-        list.sort((a, b) => (b.title ?? b.filename).compareTo(a.title ?? a.filename));
+        list.sort((b, b2) => (b2.title ?? b2.filename).compareTo(b.title ?? b.filename));
       case _SortMode.artist:
         list.sort((a, b) => (a.artist ?? '').compareTo(b.artist ?? ''));
       case _SortMode.dateAdded:
@@ -47,25 +50,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   Widget _sortBar() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: Row(
         children: [
-          _chip('A → Z', _SortMode.titleAsc),
+          _chip('A → Z', _SortMode.titleAsc, Icons.sort_by_alpha_rounded),
           const SizedBox(width: 8),
-          _chip('Z → A', _SortMode.titleDesc),
+          _chip('Z → A', _SortMode.titleDesc, Icons.sort_by_alpha_rounded),
           const SizedBox(width: 8),
-          _chip('Artist', _SortMode.artist),
+          _chip('Artist', _SortMode.artist, Icons.person_outline_rounded),
           const SizedBox(width: 8),
-          _chip('Date Added', _SortMode.dateAdded),
+          _chip('Date Added', _SortMode.dateAdded, Icons.calendar_today_rounded),
         ],
       ),
     );
   }
 
-  Widget _chip(String label, _SortMode mode) {
+  Widget _chip(String label, _SortMode mode, IconData icon) {
     final selected = _sortMode == mode;
     return ChoiceChip(
-      label: Text(label),
+      avatar: Icon(icon, size: 14),
+      label: Text(label, style: const TextStyle(fontSize: 12)),
       selected: selected,
       onSelected: (_) => setState(() => _sortMode = mode),
     );
@@ -83,37 +87,35 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               ? TextField(
                   controller: _searchController,
                   autofocus: true,
-                  style: const TextStyle(fontSize: 16),
-                  decoration: const InputDecoration(
-                    hintText: 'Search library...',
+                  style: const TextStyle(fontSize: 15),
+                  decoration: InputDecoration(
+                    hintText: 'Search songs, artists, albums...',
                     border: InputBorder.none,
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.clear, size: 18),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    ),
                   ),
                   onChanged: (v) => setState(() => _searchQuery = v),
                 )
-              : const Text('Library'),
+              : const Text('Library', style: TextStyle(fontWeight: FontWeight.bold)),
           bottom: const TabBar(
             isScrollable: true,
             tabAlignment: TabAlignment.start,
             tabs: [
-              Tab(text: 'Songs'),
-              Tab(text: 'Artists'),
-              Tab(text: 'Albums'),
-              Tab(text: 'Folders'),
-              Tab(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.favorite, size: 14, color: Colors.pinkAccent),
-                    SizedBox(width: 4),
-                    Text('Favourites'),
-                  ],
-                ),
-              ),
+              Tab(icon: Icon(Icons.music_note_rounded, size: 18), text: 'Songs'),
+              Tab(icon: Icon(Icons.person_rounded, size: 18), text: 'Artists'),
+              Tab(icon: Icon(Icons.album_rounded, size: 18), text: 'Albums'),
+              Tab(icon: Icon(Icons.folder_rounded, size: 18), text: 'Folders'),
+              Tab(icon: Icon(Icons.favorite_rounded, size: 18, color: Colors.pinkAccent), text: 'Favourites'),
             ],
           ),
           actions: [
             IconButton(
-              icon: Icon(_showSearch ? Icons.close : Icons.search),
+              icon: Icon(_showSearch ? Icons.close : Icons.search_rounded),
               tooltip: _showSearch ? 'Close search' : 'Search library',
               onPressed: () {
                 setState(() {
@@ -133,8 +135,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Rescan',
+              icon: const Icon(Icons.sync_rounded),
+              tooltip: 'Rescan library',
               onPressed: () async {
                 final scanner = await ref.read(scannerServiceProvider.future);
                 final result = await scanner.scan(
@@ -144,7 +146,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                     SnackBar(
                       content: Text(
                         '${result.newOrUpdated} new, ${result.updated} updated, '
-                        '${result.unchanged} unchanged, ${result.deleted} removed',
+                        '${result.unchanged} unchanged',
                       ),
                     ),
                   );
@@ -167,7 +169,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
             final sorted = _sortSongs(songs);
 
-            // Build grouped data
             final artists = <String, List<Song>>{};
             final albums = <String, List<Song>>{};
             final folders = <String, List<Song>>{};

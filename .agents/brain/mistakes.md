@@ -71,3 +71,9 @@
 - Fix: Created a dedicated permanent keystore `android/app/resonance-keystore.jks`, whitelisted it in `android/.gitignore`, and configured `android/app/build.gradle.kts` to sign all release builds with this keystore so every build has an identical signature.
 - Status: Resolved
 - Date: 2026-11-12
+
+- Problem: Metadata fetch skipped online API matches on valid songs, Library Health report lacked actionable fix buttons, and Health History was non-interactive.
+- Cause: 1) MusicBrainz and iTunes APIs received plain string responses without explicit `jsonDecode`, "Unknown Artist" poisoned MusicBrainz Lucene queries, and matcher only received raw filename instead of cleaned title. 2) Broken artwork and duplicates had no handlers or repository mutators. 3) Health History was a flat un-dismissible list.
+- Fix: Added `ResponseType.plain` and explicit `jsonDecode` to remote APIs; filtered out "Unknown Artist" before API queries; passed `knownTitle` from `SongMetadataProcessor` into `SongMatcher`; implemented `updateArtworkPath` and `deleteSongById` in `LibraryRepository` and wired up "Clear Stale" and "Review & Delete" actions; redesigned `HealthHistoryScreen` with swipe-to-delete, expandable visual score charts, and clear all history dialog.
+- Status: Resolved
+- Date: 2026-11-16

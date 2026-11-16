@@ -23,3 +23,9 @@
 - Alternatives considered: Keeping a dialog popup in Settings (rejected as requested by user).
 - Affected modules: lib/presentation/settings/library_health_screen.dart, lib/presentation/settings/components/health_hero_card.dart, lib/presentation/settings/components/health_issue_tile.dart, lib/presentation/settings/components/settings_health_section.dart, lib/presentation/library/library_screen.dart
 - Date: 2026-11-11
+
+- Decision: Comprehensive UI/UX Redesign for Home, Library, and Playlist screens
+- Reason: User requested an overall UI/UX upgrade across Home, Library, and Playlists. Applied dark entertainment design system guidelines (OLED contrast, quick-action chips, visual active song highlighting, pill badges, and refined typography).
+- Alternatives considered: Minimalist text-only layout (rejected as user wanted a modern, immersive music experience).
+- Affected modules: lib/presentation/home/, lib/presentation/library/, lib/presentation/playlists/, lib/presentation/widgets/song_tile.dart
+- Date: 2026-11-16

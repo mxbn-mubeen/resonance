@@ -95,6 +95,7 @@ class SongMetadataProcessor {
     try {
       result = await matcher.match(
         rawFilename: song.filename,
+        knownTitle: song.title,
         knownArtist: song.artist,
         knownAlbum: song.album,
         knownDuration: song.duration,

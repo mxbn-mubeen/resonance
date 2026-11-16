@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 
 /// Wraps the MusicBrainz recording search API. Free, no key, but rate
@@ -8,11 +9,11 @@ class MusicBrainzApi {
   MusicBrainzApi({Dio? dio})
       : _dio = dio ??
             Dio(BaseOptions(
-              // MusicBrainz requires an identifying User-Agent per their
-              // usage policy - set a real contact string before shipping.
               headers: {
-                'User-Agent': 'OfflineMusicPlatform/0.1 (contact@example.com)'
+                'User-Agent': 'ResonanceApp/1.0.0 (https://github.com/mxbn-mubeen/resonance)'
               },
+              connectTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 10),
             ));
 
   Future<List<Map<String, dynamic>>> searchRecording({
@@ -20,9 +21,19 @@ class MusicBrainzApi {
     String? artist,
     int limit = 5,
   }) async {
-    final query = artist != null && artist.isNotEmpty
-        ? 'recording:"$title" AND artist:"$artist"'
-        : 'recording:"$title"';
+    final cleanArtist = (artist?.trim() ?? '');
+    final isUnknown = cleanArtist.isEmpty ||
+        cleanArtist.toLowerCase() == 'unknown artist' ||
+        cleanArtist.toLowerCase() == '<unknown>' ||
+        cleanArtist.toLowerCase() == 'unknown';
+
+    // Sanitize Lucene query characters
+    final safeTitle = title.replaceAll(RegExp(r'["\\]'), ' ').trim();
+    final safeArtist = cleanArtist.replaceAll(RegExp(r'["\\]'), ' ').trim();
+
+    final query = (!isUnknown && safeArtist.isNotEmpty)
+        ? 'recording:"$safeTitle" AND artist:"$safeArtist"'
+        : 'recording:"$safeTitle"';
 
     final response = await _dio.get(
       'https://musicbrainz.org/ws/2/recording',
@@ -31,8 +42,18 @@ class MusicBrainzApi {
         'fmt': 'json',
         'limit': limit,
       },
+      options: Options(
+        responseType: ResponseType.plain,
+      ),
     );
-    final results = (response.data['recordings'] as List?) ?? [];
-    return results.cast<Map<String, dynamic>>();
+    final raw = response.data;
+    if (raw == null) return [];
+    final dynamic decoded = raw is String ? jsonDecode(raw) : raw;
+    if (decoded is! Map) return [];
+    final results = (decoded['recordings'] as List?) ?? [];
+    return results
+        .whereType<Map>()
+        .map((m) => m.cast<String, dynamic>())
+        .toList();
   }
 }

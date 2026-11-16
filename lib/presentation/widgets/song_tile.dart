@@ -44,35 +44,52 @@ class _SongTileState extends ConsumerState<SongTile> {
   Widget build(BuildContext context) {
     final controller = ref.watch(playbackControllerProvider);
 
-    return ListTile(
-      leading: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: widget.song.artworkPath != null
-            ? Image.file(File(widget.song.artworkPath!), width: 44, height: 44, fit: BoxFit.cover)
-            : Container(
-                width: 44,
-                height: 44,
-                color: Theme.of(context).colorScheme.primaryContainer,
-                child: Icon(Icons.music_note, color: Theme.of(context).colorScheme.onPrimaryContainer, size: 20),
-              ),
-      ),
-      title: Text(widget.song.title ?? widget.song.filename, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: Text(widget.song.artist ?? 'Unknown Artist', maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          StreamBuilder<MediaItem?>(
-            stream: controller.mediaItem,
-            builder: (context, mediaSnapshot) {
-              final item = mediaSnapshot.data;
-              final isCurrent = item?.id == widget.song.id;
+    return StreamBuilder<MediaItem?>(
+      stream: controller.mediaItem,
+      builder: (context, mediaSnapshot) {
+        final item = mediaSnapshot.data;
+        final isCurrent = item?.id == widget.song.id;
 
-              return StreamBuilder<PlaybackState>(
+        return ListTile(
+          selected: isCurrent,
+          selectedTileColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          leading: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: widget.song.artworkPath != null && File(widget.song.artworkPath!).existsSync()
+                ? Image.file(File(widget.song.artworkPath!), width: 44, height: 44, fit: BoxFit.cover)
+                : Container(
+                    width: 44,
+                    height: 44,
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    child: Icon(Icons.music_note, color: Theme.of(context).colorScheme.onPrimaryContainer, size: 20),
+                  ),
+          ),
+          title: Text(
+            widget.song.title ?? widget.song.filename,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+              color: isCurrent ? Theme.of(context).colorScheme.primary : null,
+            ),
+          ),
+          subtitle: Text(
+            widget.song.artist ?? 'Unknown Artist',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: isCurrent ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.8) : null,
+            ),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              StreamBuilder<PlaybackState>(
                 stream: controller.playbackState,
                 builder: (context, stateSnapshot) {
                   final playing = stateSnapshot.data?.playing ?? false;
                   
-                  // Keep a fixed width (28px) so the favorite/menu icons don't jump left/right when pausing
                   return SizedBox(
                     width: 28,
                     child: (isCurrent && playing)
@@ -83,59 +100,62 @@ class _SongTileState extends ConsumerState<SongTile> {
                         : const SizedBox.shrink(),
                   );
                 },
-              );
-            },
-          ),
-          IconButton(
-            icon: Icon(_isFavorite ? Icons.favorite : Icons.favorite_border),
-            onPressed: () {
-              if (widget.onFavoriteToggle != null) {
-                setState(() {
-                  _isFavorite = !_isFavorite;
-                });
-                widget.onFavoriteToggle!();
-              }
-            },
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            onSelected: (value) async {
-              if (value == 'add_to_playlist') {
-                _showAddToPlaylistSheet(context, ref);
-              } else if (value == 'add_to_queue') {
-                await ref.read(playbackControllerProvider).addToQueue(widget.song);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Added to queue')),
-                  );
-                }
-              } else if (value == 'play_next') {
-                await ref.read(playbackControllerProvider).playNext(widget.song);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Playing next')),
-                  );
-                }
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'play_next',
-                child: Text('Play next'),
               ),
-              const PopupMenuItem(
-                value: 'add_to_queue',
-                child: Text('Add to queue'),
+              IconButton(
+                icon: Icon(
+                  _isFavorite ? Icons.favorite : Icons.favorite_border,
+                  color: _isFavorite ? Colors.pinkAccent : null,
+                ),
+                onPressed: () {
+                  if (widget.onFavoriteToggle != null) {
+                    setState(() {
+                      _isFavorite = !_isFavorite;
+                    });
+                    widget.onFavoriteToggle!();
+                  }
+                },
               ),
-              const PopupMenuItem(
-                value: 'add_to_playlist',
-                child: Text('Add to playlist'),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                onSelected: (value) async {
+                  if (value == 'add_to_playlist') {
+                    _showAddToPlaylistSheet(context, ref);
+                  } else if (value == 'add_to_queue') {
+                    await ref.read(playbackControllerProvider).addToQueue(widget.song);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Added to queue')),
+                      );
+                    }
+                  } else if (value == 'play_next') {
+                    await ref.read(playbackControllerProvider).playNext(widget.song);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Playing next')),
+                      );
+                    }
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'play_next',
+                    child: Text('Play next'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'add_to_queue',
+                    child: Text('Add to queue'),
+                  ),
+                  const PopupMenuItem(
+                    value: 'add_to_playlist',
+                    child: Text('Add to playlist'),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
-      onTap: widget.onTap,
+          onTap: widget.onTap,
+        );
+      },
     );
   }
 

@@ -169,6 +169,32 @@ class LibraryRepository {
     });
   }
 
+  Future<void> setHidden(String songId, bool hidden) async {
+    await isar.writeTxn(() async {
+      final rec = await isar.songRecords.get(int.parse(songId));
+      if (rec != null) {
+        rec.hidden = hidden;
+        await isar.songRecords.put(rec);
+      }
+    });
+  }
+
+  Future<void> updateArtworkPath(String songId, String? artworkPath) async {
+    await isar.writeTxn(() async {
+      final rec = await isar.songRecords.get(int.parse(songId));
+      if (rec != null) {
+        rec.artworkPath = artworkPath;
+        await isar.songRecords.put(rec);
+      }
+    });
+  }
+
+  Future<void> deleteSongById(String songId) async {
+    await isar.writeTxn(() async {
+      await isar.songRecords.delete(int.parse(songId));
+    });
+  }
+
   Stream<List<Song>> watchAllSongs() {
     return isar.songRecords
         .filter()

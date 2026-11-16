@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 
 /// Wraps the free iTunes Search API - no auth key required.
@@ -6,7 +7,12 @@ import 'package:dio/dio.dart';
 class ItunesApi {
   final Dio _dio;
 
-  ItunesApi({Dio? dio}) : _dio = dio ?? Dio();
+  ItunesApi({Dio? dio})
+      : _dio = dio ??
+            Dio(BaseOptions(
+              connectTimeout: const Duration(seconds: 10),
+              receiveTimeout: const Duration(seconds: 10),
+            ));
 
   /// Returns raw result maps: {trackName, artistName, collectionName,
   /// artworkUrl100, releaseDate, trackTimeMillis, ...}
@@ -24,8 +30,18 @@ class ItunesApi {
         'limit': limit,
         'country': country,
       },
+      options: Options(
+        responseType: ResponseType.plain,
+      ),
     );
-    final results = (response.data['results'] as List?) ?? [];
-    return results.cast<Map<String, dynamic>>();
+    final raw = response.data;
+    if (raw == null) return [];
+    final dynamic decoded = raw is String ? jsonDecode(raw) : raw;
+    if (decoded is! Map) return [];
+    final results = (decoded['results'] as List?) ?? [];
+    return results
+        .whereType<Map>()
+        .map((m) => m.cast<String, dynamic>())
+        .toList();
   }
 }

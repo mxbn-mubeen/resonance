@@ -20,4 +20,12 @@ class LibraryHealthHistoryRepository {
         .limit(limit)
         .findAll();
   }
+
+  Future<void> deleteRun(int id) async {
+    await _isar.writeTxn(() => _isar.libraryHealthHistoryRecords.delete(id));
+  }
+
+  Future<void> clearHistory() async {
+    await _isar.writeTxn(() => _isar.libraryHealthHistoryRecords.clear());
+  }
 }

@@ -46,6 +46,9 @@ class MetadataCleaner {
       result = result.replaceAll(RegExp(RegExp.escape(token), caseSensitive: false), '');
     }
 
+    // Strip leading track numbers, e.g. "01 - ", "01. ", "01 "
+    result = result.replaceFirst(RegExp(r'^\s*\d{1,3}\s*[-._\s]\s*'), '');
+
     // Replace separators (- _ .) with spaces, collapse brackets/punctuation.
     result = result.replaceAll(RegExp(r'[._\-]+'), ' ');
     result = result.replaceAll(RegExp(r'[\(\)\[\]{}]'), ' ');

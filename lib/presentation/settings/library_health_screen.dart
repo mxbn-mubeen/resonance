@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/di/providers.dart';
 import '../../data/local/isar_schemas.dart';
 import '../../domain/entities/song.dart';
+import 'components/duplicates_dialog.dart';
 import 'components/health_hero_card.dart';
 import 'components/health_issue_tile.dart';
 import 'health_history_screen.dart';
@@ -24,6 +25,8 @@ class _LibraryHealthScreenState extends ConsumerState<LibraryHealthScreen> {
   int _brokenArtworkCount = 0;
   int _duplicatesCount = 0;
   bool _hasScanned = false;
+  List<Song> _brokenSongs = [];
+  List<Song> _duplicateSongs = [];
 
   @override
   void initState() {
@@ -69,6 +72,8 @@ class _LibraryHealthScreenState extends ConsumerState<LibraryHealthScreen> {
           _missingTagsCount = missing.length;
           _brokenArtworkCount = broken.length;
           _duplicatesCount = duplicates.length;
+          _brokenSongs = broken;
+          _duplicateSongs = duplicates;
           _hasScanned = true;
           _isScanning = false;
         });
@@ -96,6 +101,48 @@ class _LibraryHealthScreenState extends ConsumerState<LibraryHealthScreen> {
         );
       }
     }
+  }
+
+  Future<void> _fixBrokenArtwork() async {
+    if (_brokenSongs.isEmpty) return;
+    final repo = await ref.read(libraryRepositoryProvider.future);
+    int fixed = 0;
+    for (final s in _brokenSongs) {
+      try {
+        await repo.updateArtworkPath(s.id, null);
+        fixed++;
+      } catch (_) {}
+    }
+    if (mounted) {
+      setState(() {
+        _brokenArtworkCount = 0;
+        _brokenSongs = [];
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('🖼️ Cleared $fixed stale artwork paths — re-fetch to restore.')),
+      );
+    }
+  }
+
+  Future<void> _showDuplicatesDialog() async {
+    if (_duplicateSongs.isEmpty) return;
+    final repo = await ref.read(libraryRepositoryProvider.future);
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => DuplicatesDialog(
+        duplicates: _duplicateSongs,
+        onDelete: (song) async {
+          await repo.deleteSongById(song.id);
+          if (mounted) {
+            setState(() {
+              _duplicateSongs.remove(song);
+              _duplicatesCount = (_duplicatesCount - 1).clamp(0, _duplicatesCount);
+            });
+          }
+        },
+      ),
+    );
   }
 
   @override
@@ -156,6 +203,8 @@ class _LibraryHealthScreenState extends ConsumerState<LibraryHealthScreen> {
               title: 'Broken Artwork',
               subtitle: 'Database records with missing image files on disk',
               count: _brokenArtworkCount,
+              actionLabel: _brokenArtworkCount > 0 ? 'Clear Stale' : null,
+              onAction: _brokenArtworkCount > 0 ? _fixBrokenArtwork : null,
             ),
             const SizedBox(height: 10),
             HealthIssueTile(
@@ -164,6 +213,8 @@ class _LibraryHealthScreenState extends ConsumerState<LibraryHealthScreen> {
               title: 'Duplicate Tracks',
               subtitle: 'Identical title and artist across multiple folders',
               count: _duplicatesCount,
+              actionLabel: _duplicatesCount > 0 ? 'Review & Delete' : null,
+              onAction: _duplicatesCount > 0 ? _showDuplicatesDialog : null,
             ),
           ],
         ),

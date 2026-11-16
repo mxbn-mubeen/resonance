@@ -7,11 +7,6 @@ import '../../playlists/playlists_screen.dart' show openSmartPlaylist;
 import '../../playlists/smart_playlist_definitions.dart';
 import '../../widgets/playlist_cover_widget.dart';
 
-/// Shows manual playlists AND the Automatic/AI smart playlists in one
-/// combined horizontal scroll, in that order. Manual playlists get a real
-/// artwork-mosaic cover (PlaylistCoverWidget); smart playlists get an
-/// icon tile since they have no persisted song list to pull artwork from
-/// until you actually tap one.
 class HomePlaylistsSection extends ConsumerWidget {
   const HomePlaylistsSection({super.key});
 
@@ -25,7 +20,7 @@ class HomePlaylistsSection extends ConsumerWidget {
         final totalCount = manual.length + smartDefs.length;
 
         return SizedBox(
-          height: 100,
+          height: 135,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: totalCount,
@@ -34,8 +29,9 @@ class HomePlaylistsSection extends ConsumerWidget {
               if (i < manual.length) {
                 final p = manual[i];
                 return _PlaylistCard(
-                  cover: PlaylistCoverWidget(songIds: p.songIds, size: 80),
+                  cover: PlaylistCoverWidget(songIds: p.songIds, size: 92),
                   label: p.name,
+                  subtitle: '${p.songIds.length} tracks',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => PlaylistDetailScreen(playlist: p)),
@@ -49,7 +45,7 @@ class HomePlaylistsSection extends ConsumerWidget {
           ),
         );
       },
-      loading: () => const SizedBox(height: 100, child: Center(child: CircularProgressIndicator())),
+      loading: () => const SizedBox(height: 120, child: Center(child: CircularProgressIndicator())),
       error: (e, _) => const SizedBox(),
     );
   }
@@ -58,38 +54,50 @@ class HomePlaylistsSection extends ConsumerWidget {
 class _PlaylistCard extends StatelessWidget {
   final Widget cover;
   final String label;
+  final String subtitle;
   final VoidCallback onTap;
 
-  const _PlaylistCard({required this.cover, required this.label, required this.onTap});
+  const _PlaylistCard({
+    required this.cover,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          cover,
-          const SizedBox(height: 4),
-          SizedBox(
-            width: 72,
-            child: Text(
+      child: SizedBox(
+        width: 92,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: cover,
+            ),
+            const SizedBox(height: 6),
+            Text(
               label,
-              style: Theme.of(context).textTheme.labelSmall,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-          ),
-        ],
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: const TextStyle(fontSize: 10, color: Colors.white54),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Icon-tile version for Automatic/AI playlists - same card shape as
-/// manual playlists' artwork mosaic, but there's no song list to pull
-/// artwork from until the query actually runs on tap.
 class _SmartPlaylistCard extends ConsumerStatefulWidget {
   final SmartPlaylistDef def;
   const _SmartPlaylistCard({required this.def});
@@ -104,27 +112,33 @@ class _SmartPlaylistCardState extends ConsumerState<_SmartPlaylistCard> {
   @override
   Widget build(BuildContext context) {
     return _PlaylistCard(
-      cover: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Theme.of(context).colorScheme.primary.withOpacity(0.8),
-                Theme.of(context).colorScheme.tertiary.withOpacity(0.8),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+      cover: Container(
+        width: 92,
+        height: 92,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          gradient: LinearGradient(
+            colors: [
+              Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
+              Theme.of(context).colorScheme.tertiary.withValues(alpha: 0.7),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          child: _loading
-              ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)))
-              : Icon(widget.def.icon, color: Colors.white, size: 32),
+          border: Border.all(color: Colors.white12),
         ),
+        child: _loading
+            ? const Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                ),
+              )
+            : Icon(widget.def.icon, color: Colors.white, size: 36),
       ),
       label: widget.def.title,
+      subtitle: widget.def.subtitle,
       onTap: _loading
           ? () {}
           : () async {
