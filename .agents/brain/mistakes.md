@@ -89,3 +89,9 @@
 - Fix: Added `is_foreground_fetching` flag check in `callbackDispatcher` to prevent background WorkManager from running concurrently with the active foreground fetch loop, removed the premature initial `onProgress(0, ...)` notification reset, and routed live notification updates directly from `MetadataFetchNotifier`.
 - Status: Resolved
 - Date: 2026-11-16
+
+- Problem: Compilation error `A value of type 'String' can't be assigned to a variable of type 'int?'` in `duplicate_group_card.dart:154:69`.
+- Cause: `_deletingSongId` was declared as `int?`, while `Song.id` is of type `String`.
+- Fix: Changed `_deletingSongId` to `String?`.
+- Status: Resolved
+- Date: 2026-11-16

@@ -23,7 +23,7 @@ class DuplicateGroupCard extends ConsumerStatefulWidget {
 }
 
 class _DuplicateGroupCardState extends ConsumerState<DuplicateGroupCard> {
-  int? _deletingSongId;
+  String? _deletingSongId;
 
   String _formatDuration(Duration d) {
     final m = d.inMinutes;
